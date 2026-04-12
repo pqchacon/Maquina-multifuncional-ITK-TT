@@ -47,7 +47,7 @@ function PosicionarMaquina() {
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     const { name } = e.currentTarget;
 
-    // 🚫 Anti multi-touch
+    // Anti multi-touch
     if (activeButton !== null) return;
 
     const config = commandMap[name];
@@ -80,7 +80,7 @@ function PosicionarMaquina() {
     if (activeButton) stopMotor(activeButton);
   };
 
-  // 🛡 Seguridad global
+  // Seguridad global
   useEffect(() => {
     const handleGlobalPointerUp = () => {
       if (activeButton) stopMotor(activeButton);

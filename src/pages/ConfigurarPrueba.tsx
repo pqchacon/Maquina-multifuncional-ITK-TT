@@ -18,7 +18,7 @@ function ConfigurarPrueba() {
   const { theme } = useContext(ThemeContext);
 
   /* ================================
-     🔹 ROTACIÓN MOTOR
+     ROTACIÓN MOTOR
   ================================== */
 
   const [activeButton, setActiveButton] = useState<string | null>(null);
@@ -90,7 +90,7 @@ function ConfigurarPrueba() {
   }, [activeButton]);
 
   /* ================================
-     🔹 POSICIONES
+     POSICIONES
   ================================== */
 
   const [positions, setPositions] = useState<{
@@ -102,7 +102,7 @@ function ConfigurarPrueba() {
   });
 
   /* ================================
-     🔹 BOTONES
+     BOTONES
   ================================== */
 
   const [buttons, setButtons] = useState({
@@ -161,7 +161,7 @@ function ConfigurarPrueba() {
   };
 
   /* ================================
-     🔹 VALIDACIÓN INPUTS
+     VALIDACIÓN INPUTS
   ================================== */
 
   const validarInput = (name: "ciclos" | "velocidad", value: string) => {
@@ -196,7 +196,7 @@ function ConfigurarPrueba() {
   };
 
   /* ================================
-     🔹 TECLADO NUMÉRICO
+     TECLADO NUMÉRICO
   ================================== */
 
   const handleKeyPress = (key: string) => {
@@ -226,7 +226,7 @@ function ConfigurarPrueba() {
   };
 
   const handleEnter = () => {
-    // 🔥 cerrar teclado
+    // Cerrar teclado
     setActiveInput(null);
 
     setTimeout(() => {
@@ -237,7 +237,7 @@ function ConfigurarPrueba() {
   };
 
   /* ================================
-     🔹 SERIAL
+     SERIAL
   ================================== */
 
   useEffect(() => {
@@ -287,7 +287,7 @@ function ConfigurarPrueba() {
   }, []);
 
   /* ================================
-     🔹 INICIAR PRUEBA
+     INICIAR PRUEBA
   ================================== */
 
   const isReady =
@@ -309,10 +309,6 @@ function ConfigurarPrueba() {
       ciclos: Number(inputs.ciclos),
     });
   };
-
-  /* ================================
-     🔹 UI
-  ================================== */
 
   return (
     <>

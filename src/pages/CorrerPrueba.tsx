@@ -103,7 +103,6 @@ function CorrerPrueba() {
     };
   }, [pausePlay, tiempoEstimado, testFinished]);
 
-  // 🔹 MISMO FORMATO que PosicionarMaquina
   const sendJSON = (data: object) => {
     window.api.sendSerial(JSON.stringify(data));
   };
@@ -112,7 +111,7 @@ function CorrerPrueba() {
     // Cambia estado visual
     setPausePlay((prev) => !prev);
 
-    // 🔹 Enviar comando a la ESP32
+    // Enviar comando a la ESP32
     sendJSON({
       motor: 3,
       accion: "pause",
@@ -157,7 +156,7 @@ function CorrerPrueba() {
       </div>
 
       <main className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        {/* 🔹 FONDO */}
+        {/* FONDO */}
         <div
           className="absolute inset-0 bg-cover bg-[position:90%_15%]"
           style={
@@ -167,12 +166,11 @@ function CorrerPrueba() {
           }
         />
 
-        {/* 🔹 OVERLAY */}
+        {/* OVERLAY */}
         <div className="absolute inset-0 bg-black/50 z-0 pointer-events-none" />
 
-        {/* 🔹 CONTENIDO */}
+        {/* CONTENIDO */}
         <div className="relative z-10 flex flex-col items-center w-full max-w-2xl gap-4 px-4">
-          {/* CARD 1 */}
           <Card>
             <div className="flex flex-col items-center gap-2 w-full">
               <Output size="badge-lg">Tiempo transcurrido</Output>
@@ -198,7 +196,6 @@ function CorrerPrueba() {
             </div>
           </Card>
 
-          {/* CARD 2 */}
           <Card>
             <div className="flex justify-between w-full max-w-md">
               <ActionButton

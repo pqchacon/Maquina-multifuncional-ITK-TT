@@ -27,7 +27,6 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools();
   } else {
-    // 🔥 IMPORTANTE: usar ruta absoluta segura en producción
     const indexPath = path.join(__dirname, "..", "dist", "index.html");
     mainWindow.loadFile(indexPath);
   }
@@ -35,7 +34,7 @@ function createWindow() {
 
 function setupSerial() {
   port = new SerialPort({
-    path: "COM3", // ⚠️ Cambia al puerto correcto
+    path: "COM3", // Cambiar al puerto correcto
     baudRate: 115200,
     autoOpen: false,
   });

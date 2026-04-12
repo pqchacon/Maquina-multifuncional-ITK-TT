@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld("api", {
 
     ipcRenderer.on("serial-data", listener);
 
-    // 🔥 Devuelve función para remover listener
+    // Devuelve función para remover listener
     return () => {
       ipcRenderer.removeListener("serial-data", listener);
     };
