@@ -3,7 +3,7 @@ type ActionButtonProps = {
   outline?: boolean; // mejor opcional
   ancho?: number;
   name: string;
-  disabled?: boolean; // 👈 AGREGA ESTO
+  disabled?: boolean;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onPointerUp?: (e: React.PointerEvent<HTMLButtonElement>) => void;
@@ -26,7 +26,7 @@ function ActionButton({
   return (
     <button
       name={name}
-      disabled={disabled} // 👈 pásalo aquí
+      disabled={disabled}
       className={`btn ${outline ? "btn-outline" : ""} btn-warning btn-lg ${ancho ? `w-${ancho}` : ""}`}
       onClick={onClick}
       onPointerDown={onPointerDown}

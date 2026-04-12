@@ -17,7 +17,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           }`}
         >
           <input
-            ref={ref} // 🔥 aquí va el ref
+            ref={ref}
             type="text"
             name={name}
             className="grow"

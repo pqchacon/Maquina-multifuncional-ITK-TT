@@ -12,12 +12,12 @@ function BackButton({ onClick, onClickExtra, ruta }: BackButtonProps) {
 
   const handleClick = () => {
     if (onClick) {
-      onClick(); // 🔹 abre modal
+      onClick(); // abre modal
       return;
     }
 
     if (onClickExtra) {
-      onClickExtra(); // 🔹 ejecuta terminate si se usa directo
+      onClickExtra(); // ejecuta terminate si se usa directo
     }
 
     navigate(ruta);

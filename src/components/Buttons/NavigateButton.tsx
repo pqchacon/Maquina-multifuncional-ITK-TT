@@ -11,10 +11,10 @@ function NavigateButton({ children, ruta, onClickExtra }: ButtonProps) {
 
   const handleClick = () => {
     if (onClickExtra) {
-      onClickExtra(); // 🔥 Ejecuta terminate
+      onClickExtra();
     }
 
-    navigate(ruta); // 🔥 Luego navega
+    navigate(ruta);
   };
 
   return (

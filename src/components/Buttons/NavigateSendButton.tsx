@@ -22,10 +22,10 @@ function NavigateSendButton({
 
   const handleClick = () => {
     if (onClick) {
-      onClick(); // 👈 ejecuta primero la función externa
+      onClick();
     }
 
-    navigate(ruta, { state: { sendDato: dato } }); // 👈 luego navega
+    navigate(ruta, { state: { sendDato: dato } });
   };
 
   return (
