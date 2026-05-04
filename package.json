@@ -2,7 +2,10 @@
   "name": "gui",
   "private": true,
   "version": "2.0.0",
-  "author": "Antonio Chacón",
+  "author": {
+    "name": "Antonio Chacón",
+    "email": "pqchacon@gmail.com"
+  },
   "description": "GUI App with Electron + Vite + React",
   "type": "module",
   "main": "electron/main.js",
@@ -18,7 +21,7 @@
 
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux --arm64"
+    "dist:linux": "npm run build && electron-builder --linux"
   },
 
   "dependencies": {
@@ -62,19 +65,33 @@
     },
 
     "files": [
-      "dist/**/*",
-      "electron/**/*",
+      {
+        "from": "dist",
+        "to": "dist"
+      },
+      {
+        "from": "electron",
+        "to": "electron"
+      },
       "package.json"
     ],
 
     "asar": true,
+
+    "npmRebuild": true,
+    "buildDependenciesFromSource": true,
 
     "win": {
       "target": "nsis"
     },
 
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        {
+          "target": "deb",
+          "arch": ["arm64"]
+        }
+      ],
       "category": "Utility"
     }
   }

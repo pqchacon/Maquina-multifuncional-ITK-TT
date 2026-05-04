@@ -5,56 +5,74 @@ const validSendChannels = ["send-serial"];
 const validReceiveChannels = ["serial-data", "serial-error", "serial-status"];
 
 contextBridge.exposeInMainWorld("api", {
+  // ===============================
   // Enviar datos al puerto serial
+  // ===============================
   sendSerial: (data) => {
-    if (validSendChannels.includes("send-serial")) {
-      ipcRenderer.send("send-serial", data);
+    const channel = "send-serial";
+
+    if (validSendChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
     }
   },
 
-  // Escuchar datos del serial (con cleanup)
+  // ===============================
+  // Escuchar datos del serial
+  // ===============================
   onSerialData: (callback) => {
-    if (!validReceiveChannels.includes("serial-data")) return;
+    const channel = "serial-data";
+    if (!validReceiveChannels.includes(channel)) return;
+
+    ipcRenderer.removeAllListeners(channel);
 
     const listener = (_event, data) => {
       callback(data);
     };
 
-    ipcRenderer.on("serial-data", listener);
+    ipcRenderer.on(channel, listener);
 
-    // Devuelve función para remover listener
     return () => {
-      ipcRenderer.removeListener("serial-data", listener);
+      ipcRenderer.removeListener(channel, listener);
     };
   },
 
+  // ===============================
   // Escuchar errores
+  // ===============================
   onSerialError: (callback) => {
-    if (!validReceiveChannels.includes("serial-error")) return;
+    const channel = "serial-error";
+    if (!validReceiveChannels.includes(channel)) return;
+
+    ipcRenderer.removeAllListeners(channel);
 
     const listener = (_event, error) => {
       callback(error);
     };
 
-    ipcRenderer.on("serial-error", listener);
+    ipcRenderer.on(channel, listener);
 
     return () => {
-      ipcRenderer.removeListener("serial-error", listener);
+      ipcRenderer.removeListener(channel, listener);
     };
   },
 
-  // Escuchar estado
+  // ===============================
+  // Escuchar estado del puerto
+  // ===============================
   onSerialStatus: (callback) => {
-    if (!validReceiveChannels.includes("serial-status")) return;
+    const channel = "serial-status";
+    if (!validReceiveChannels.includes(channel)) return;
+
+    ipcRenderer.removeAllListeners(channel);
 
     const listener = (_event, status) => {
       callback(status);
     };
 
-    ipcRenderer.on("serial-status", listener);
+    ipcRenderer.on(channel, listener);
 
     return () => {
-      ipcRenderer.removeListener("serial-status", listener);
+      ipcRenderer.removeListener(channel, listener);
     };
   },
 });

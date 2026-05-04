@@ -8,10 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
+const isWindows = process.platform === "win32";
 
 let mainWindow = null;
 let port = null;
+let parser = null;
 
+// ===============================
+// Crear ventana
+// ===============================
 function createWindow() {
   mainWindow = new BrowserWindow({
     kiosk: true,
@@ -32,19 +37,69 @@ function createWindow() {
   }
 }
 
-function setupSerial() {
+// ===============================
+// Detectar puerto automáticamente
+// ===============================
+async function getSerialPath() {
+  try {
+    const ports = await SerialPort.list();
+    console.log("Puertos disponibles:", ports);
+
+    if (!ports.length) return null;
+
+    // 🔹 Prioridad Linux (Raspberry)
+    if (!isWindows) {
+      const preferred =
+        ports.find((p) => p.path.includes("ttyUSB")) ||
+        ports.find((p) => p.path.includes("ttyACM")) ||
+        ports[0];
+
+      return preferred.path;
+    }
+
+    // 🔹 Windows
+    return ports[0].path;
+  } catch (error) {
+    console.error("Error listando puertos:", error);
+    return null;
+  }
+}
+
+// ===============================
+// Configurar puerto serial
+// ===============================
+async function setupSerial() {
+  const serialPath = await getSerialPath();
+
+  if (!serialPath) {
+    console.error("No se encontro puerto serial");
+    mainWindow?.webContents.send(
+      "serial-error",
+      "No se encontró puerto serial",
+    );
+
+    // Reintentar en 3 segundos
+    setTimeout(setupSerial, 3000);
+    return;
+  }
+
+  console.log("Usando puerto:", serialPath);
+
   port = new SerialPort({
-    path: "COM3", // Cambiar al puerto correcto
+    path: serialPath,
     baudRate: 115200,
     autoOpen: false,
   });
 
-  const parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
+  parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
 
   port.open((err) => {
     if (err) {
       console.error("Error abriendo puerto:", err.message);
       mainWindow?.webContents.send("serial-error", err.message);
+
+      // Reintentar
+      setTimeout(setupSerial, 3000);
       return;
     }
   });
@@ -57,6 +112,9 @@ function setupSerial() {
   port.on("close", () => {
     console.log("Puerto cerrado");
     mainWindow?.webContents.send("serial-status", "closed");
+
+    // 🔁 Reconexión automática
+    setTimeout(setupSerial, 3000);
   });
 
   port.on("error", (err) => {
@@ -77,6 +135,9 @@ function setupSerial() {
   });
 }
 
+// ===============================
+// Enviar datos al serial
+// ===============================
 ipcMain.on("send-serial", (_, data) => {
   if (port?.isOpen) {
     console.log("Enviando:", data);
@@ -87,6 +148,9 @@ ipcMain.on("send-serial", (_, data) => {
   }
 });
 
+// ===============================
+// Ciclo de vida de Electron
+// ===============================
 app.whenReady().then(() => {
   createWindow();
   setupSerial();

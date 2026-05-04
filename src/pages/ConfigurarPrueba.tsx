@@ -72,8 +72,8 @@ function ConfigurarPrueba() {
     }
   };
 
-  const handleRotatePointerCancel = stopRotateMotor;
-  const handleRotatePointerLeave = stopRotateMotor;
+  //const handleRotatePointerCancel = stopRotateMotor;
+  //const handleRotatePointerLeave = stopRotateMotor;
 
   useEffect(() => {
     const handleGlobalPointerUp = () => {
@@ -341,8 +341,8 @@ function ConfigurarPrueba() {
                   }
                   onPointerDown={handleRotatePointerDown}
                   onPointerUp={handleRotatePointerUp}
-                  onPointerCancel={handleRotatePointerCancel}
-                  onPointerLeave={handleRotatePointerLeave}
+                  //onPointerCancel={handleRotatePointerCancel}
+                  //onPointerLeave={handleRotatePointerLeave}
                 >
                   <FaArrowRotateLeft size={28} />
                 </ActionButton>
@@ -357,8 +357,8 @@ function ConfigurarPrueba() {
                   }
                   onPointerDown={handleRotatePointerDown}
                   onPointerUp={handleRotatePointerUp}
-                  onPointerCancel={handleRotatePointerCancel}
-                  onPointerLeave={handleRotatePointerLeave}
+                  //onPointerCancel={handleRotatePointerCancel}
+                  //onPointerLeave={handleRotatePointerLeave}
                 >
                   <FaArrowRotateRight size={28} />
                 </ActionButton>
