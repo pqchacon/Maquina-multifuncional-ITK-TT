@@ -15,6 +15,27 @@ let port = null;
 let parser = null;
 
 // ===============================
+// Cola de mensajes hasta que el renderer esté listo
+// ===============================
+let rendererReady = false;
+let messageQueue = [];
+
+ipcMain.on("renderer-ready", () => {
+  rendererReady = true;
+  console.log(
+    "[MAIN] Renderer listo, enviando cola:",
+    messageQueue.length,
+    "mensajes",
+  );
+
+  // Enviar todos los mensajes que llegaron antes de que el renderer estuviera listo
+  messageQueue.forEach((msg) => {
+    mainWindow?.webContents.send("serial-data", msg);
+  });
+  messageQueue = [];
+});
+
+// ===============================
 // Crear ventana
 // ===============================
 function createWindow() {
@@ -26,6 +47,13 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Resetear rendererReady cada vez que se crea o recarga la ventana
+  mainWindow.webContents.on("did-start-loading", () => {
+    rendererReady = false;
+    messageQueue = [];
+    console.log("[MAIN] Ventana recargando, renderer marcado como no listo");
   });
 
   if (isDev) {
@@ -78,7 +106,6 @@ async function setupSerial() {
       "No se encontró puerto serial",
     );
 
-    // Reintentar en 3 segundos
     setTimeout(setupSerial, 3000);
     return;
   }
@@ -98,7 +125,6 @@ async function setupSerial() {
       console.error("Error abriendo puerto:", err.message);
       mainWindow?.webContents.send("serial-error", err.message);
 
-      // Reintentar
       setTimeout(setupSerial, 3000);
       return;
     }
@@ -130,8 +156,15 @@ async function setupSerial() {
 
     if (!received) return;
 
-    console.log("Mensaje limpio:", received);
-    mainWindow?.webContents.send("serial-data", received);
+    console.log(`[SERIAL RAW] ${Date.now()} → ${received}`);
+
+    // ✅ Si el renderer no está listo, encolar el mensaje en lugar de perderlo
+    if (rendererReady) {
+      mainWindow?.webContents.send("serial-data", received);
+    } else {
+      console.log("[MAIN] Renderer no listo, encolando:", received);
+      messageQueue.push(received);
+    }
   });
 }
 

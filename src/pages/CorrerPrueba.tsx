@@ -15,27 +15,35 @@ import FondoIntertekOscuro from "../assets/FondoIntertekOscuro.jpg";
 function CorrerPrueba() {
   const { theme } = useContext(ThemeContext);
 
-  const [pausePlay, setPausePlay] = useState(false);
+  // Estado visual del botón (para re-render del UI)
+  const [isPaused, setIsPaused] = useState(false);
   const [ciclosCompletados, setCiclosCompletados] = useState(0);
   const [testFinished, setTestFinished] = useState(false);
   const [tiempoEstimado, setTiempoEstimado] = useState(0);
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
   const [progreso, setProgreso] = useState(0);
 
+  // Refs para control interno del timer (no disparan re-renders ni re-montan efectos)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inicioRef = useRef<number | null>(null);
   const tiempoPausaRef = useRef<number>(0);
+  const isPausedRef = useRef<boolean>(false);
+
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const location = useLocation();
   const ciclos = location.state?.sendDato ?? 0;
 
+  // EFECTO 1 — Registrar listener serial y avisar al main que el renderer está listo
   useEffect(() => {
     const handleSerialData = (data: string) => {
+      console.log(`[RENDERER] ${Date.now()} → ${data}`);
       try {
         const parsed = JSON.parse(data);
 
         if (parsed.motor === 3) {
+          console.log(`[PARSED] estado=${parsed.estado}`, parsed);
+
           if (parsed.estado === "cycle") {
             setCiclosCompletados(parsed.ciclos);
           }
@@ -46,72 +54,95 @@ function CorrerPrueba() {
           }
 
           if (parsed.estado === "config") {
+            console.log(`[CONFIG] tiempoEstimado=${parsed.tiempoEstimado}`);
+
+            // Resetear todo el estado de la prueba
             setTiempoEstimado(parsed.tiempoEstimado);
             setTiempoTranscurrido(0);
             setProgreso(0);
             setTestFinished(false);
+            setIsPaused(false);
 
-            inicioRef.current = Date.now();
+            // Resetear refs de control
+            isPausedRef.current = false;
             tiempoPausaRef.current = 0;
+            inicioRef.current = Date.now();
           }
         }
       } catch (error) {
-        console.error("Error parseando JSON:", error);
+        console.error("Error parseando JSON:", error, "| Data recibida:", data);
       }
     };
 
-    window.api.onSerialData(handleSerialData);
+    // Registrar el listener serial
+    const cleanup = window.api.onSerialData(handleSerialData);
+
+    // ✅ Avisar al main que este componente ya está montado y escuchando.
+    // El main enviará cualquier mensaje que haya llegado antes de este punto.
+    window.api.rendererReady();
+    console.log("[RENDERER] Listo, avisando al main");
+
+    return () => {
+      cleanup?.();
+    };
   }, []);
 
+  // EFECTO 2 — Crea y mantiene el intervalo durante toda la prueba.
+  // Solo depende de tiempoEstimado para no reiniciarse por cambios de pausa o testFinished.
   useEffect(() => {
     if (tiempoEstimado <= 0) return;
-    if (testFinished) return;
 
-    if (!pausePlay) {
-      // Si estaba pausado, reanudar
-      if (!inicioRef.current) {
-        inicioRef.current = Date.now() - tiempoPausaRef.current * 1000;
-      }
-
-      intervalRef.current = setInterval(() => {
-        if (!inicioRef.current) return;
-
-        const segundosReales = (Date.now() - inicioRef.current) / 1000;
-
-        setTiempoTranscurrido(segundosReales);
-
-        const porcentaje = (segundosReales / tiempoEstimado) * 100;
-
-        setProgreso(Math.min(porcentaje + 1, 100));
-      }, 500); // 500ms más fluido
-    } else {
-      // Guardar tiempo acumulado al pausar
-      if (inicioRef.current) {
-        tiempoPausaRef.current = (Date.now() - inicioRef.current) / 1000;
-        inicioRef.current = null;
-      }
-
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
     }
+
+    intervalRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
+      if (!inicioRef.current) return;
+
+      const segundosReales = (Date.now() - inicioRef.current) / 1000;
+
+      setTiempoTranscurrido(segundosReales);
+      setProgreso(Math.min((segundosReales / tiempoEstimado) * 100, 100));
+    }, 500);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [pausePlay, tiempoEstimado, testFinished]);
+  }, [tiempoEstimado]);
+
+  // EFECTO 3 — Detiene el intervalo cuando la prueba termina
+  useEffect(() => {
+    if (testFinished && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [testFinished]);
 
   const sendJSON = (data: object) => {
     window.api.sendSerial(JSON.stringify(data));
   };
 
   const handlePausePlay = () => {
-    // Cambia estado visual
-    setPausePlay((prev) => !prev);
+    const estabaPausado = isPausedRef.current;
 
-    // Enviar comando a la ESP32
+    if (estabaPausado) {
+      // — REANUDAR —
+      inicioRef.current = Date.now() - tiempoPausaRef.current * 1000;
+      isPausedRef.current = false;
+    } else {
+      // — PAUSAR —
+      if (inicioRef.current) {
+        tiempoPausaRef.current = (Date.now() - inicioRef.current) / 1000;
+        inicioRef.current = null;
+      }
+      isPausedRef.current = true;
+    }
+
+    setIsPaused(!estabaPausado);
+
     sendJSON({
       motor: 3,
       accion: "pause",
@@ -204,7 +235,7 @@ function CorrerPrueba() {
                 outline={false}
                 ancho={60}
               >
-                {pausePlay ? (
+                {isPaused ? (
                   <>
                     <FaPlay /> <div>Play</div>
                   </>

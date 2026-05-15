@@ -3,10 +3,9 @@ import { forwardRef } from "react";
 type Props = {
   onKeyPress: (value: string) => void;
   onBackspace: () => void;
-  onEnter: () => void;
 };
 
-const keys: (string | "backspace" | "enter")[] = [
+const keys: (string | "backspace")[] = [
   "1",
   "2",
   "3",
@@ -16,16 +15,15 @@ const keys: (string | "backspace" | "enter")[] = [
   "7",
   "8",
   "9",
-  "enter",
+  ".",
   "0",
   "backspace",
 ];
 
 const NumericKeyboard = forwardRef<HTMLDivElement, Props>(
-  ({ onKeyPress, onBackspace, onEnter }, ref) => {
+  ({ onKeyPress, onBackspace }, ref) => {
     const handleClick = (key: (typeof keys)[number]) => {
       if (key === "backspace") return onBackspace();
-      if (key === "enter") return onEnter();
       onKeyPress(key);
     };
 
@@ -56,7 +54,7 @@ const NumericKeyboard = forwardRef<HTMLDivElement, Props>(
             className="btn btn-warning text-xl py-4"
             onClick={() => handleClick(key)}
           >
-            {key === "backspace" ? "⌫" : key === "enter" ? "OK" : key}
+            {key === "backspace" ? "⌫" : key}
           </button>
         ))}
       </div>

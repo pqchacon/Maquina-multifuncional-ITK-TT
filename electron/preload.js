@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 // Canales permitidos
-const validSendChannels = ["send-serial"];
+const validSendChannels = ["send-serial", "renderer-ready"];
 const validReceiveChannels = ["serial-data", "serial-error", "serial-status"];
 
 contextBridge.exposeInMainWorld("api", {
@@ -10,10 +10,16 @@ contextBridge.exposeInMainWorld("api", {
   // ===============================
   sendSerial: (data) => {
     const channel = "send-serial";
-
     if (validSendChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }
+  },
+
+  // ===============================
+  // Avisar al main que el renderer está listo para recibir mensajes
+  // ===============================
+  rendererReady: () => {
+    ipcRenderer.send("renderer-ready");
   },
 
   // ===============================
@@ -23,12 +29,8 @@ contextBridge.exposeInMainWorld("api", {
     const channel = "serial-data";
     if (!validReceiveChannels.includes(channel)) return;
 
-    ipcRenderer.removeAllListeners(channel);
-
-    const listener = (_event, data) => {
-      callback(data);
-    };
-
+    // Registrar listener individual y devolver función de limpieza
+    const listener = (_event, data) => callback(data);
     ipcRenderer.on(channel, listener);
 
     return () => {
@@ -43,12 +45,7 @@ contextBridge.exposeInMainWorld("api", {
     const channel = "serial-error";
     if (!validReceiveChannels.includes(channel)) return;
 
-    ipcRenderer.removeAllListeners(channel);
-
-    const listener = (_event, error) => {
-      callback(error);
-    };
-
+    const listener = (_event, error) => callback(error);
     ipcRenderer.on(channel, listener);
 
     return () => {
@@ -63,12 +60,7 @@ contextBridge.exposeInMainWorld("api", {
     const channel = "serial-status";
     if (!validReceiveChannels.includes(channel)) return;
 
-    ipcRenderer.removeAllListeners(channel);
-
-    const listener = (_event, status) => {
-      callback(status);
-    };
-
+    const listener = (_event, status) => callback(status);
     ipcRenderer.on(channel, listener);
 
     return () => {

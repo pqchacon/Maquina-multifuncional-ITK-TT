@@ -70,7 +70,7 @@ public:
   }
 
   // Calcula el tiempo entre pulsos en microsegundos según RPM
-  unsigned long calcularTiempoEntrePulsos(int rpm)
+  unsigned long calcularTiempoEntrePulsos(float rpm)
   {
     return (unsigned long)(60000000.0 /
                            (rpm * pulsosPorRevolucion * reduccion * 2));
@@ -103,7 +103,7 @@ public:
   }
 
   // Inicia movimiento continuo (sin límite de pasos)
-  void iniciarContinuo(int rpm, bool horario)
+  void iniciarContinuo(float rpm, bool horario)
   {
     configurarDireccion(horario);
 
@@ -119,7 +119,7 @@ public:
   }
 
   // Inicia movimiento por cantidad de pasos definida
-  void iniciarPorPasos(long pasos, int rpm, bool horario)
+  void iniciarPorPasos(long pasos, float rpm, bool horario)
   {
     configurarDireccion(horario);
 
@@ -229,7 +229,7 @@ private:
   // Configuración de la prueba
   int ciclosTotales = 0;
   int ciclosCompletados = 0;
-  int velocidadPrueba = 0;
+  float velocidadPrueba = 0;
 
 public:
   // Constructor: reutiliza el constructor de Motor
@@ -241,7 +241,7 @@ public:
   void setPosicionFinal(long pos) { posicionFinal = pos; }
 
   // Configura e inicia la prueba
-  void setPrueba(int velocidad, int ciclos)
+  void setPrueba(float velocidad, int ciclos)
   {
     if (posicionInicio == posicionFinal)
     {
@@ -336,33 +336,6 @@ public:
     Serial.println();
   }
 
-  // Calcula tiempo estimado de la prueba en segundos
-  double calcularTiempoEstimado()
-  {
-    long distanciaBase = abs(posicionFinal - posicionInicio);
-    if (distanciaBase == 0 || velocidadPrueba == 0)
-      return 0;
-
-    uint64_t tPulso = calcularTiempoEntrePulsos(velocidadPrueba);
-
-    uint64_t tiempoPorPaso = tPulso * 2ULL;
-
-    long posicionActual = getPosicion();
-    long distanciaInicial = abs(posicionActual - posicionInicio);
-
-    uint64_t tiempoInicial =
-        (uint64_t)distanciaInicial * tiempoPorPaso;
-
-    uint64_t tiempoPorCiclo =
-        (uint64_t)(2LL * distanciaBase) * tiempoPorPaso;
-
-    uint64_t tiempoTotal =
-        tiempoInicial +
-        ((uint64_t)ciclosTotales * tiempoPorCiclo);
-
-    return (float)(tiempoTotal / 1000000.0);
-  }
-
   // Envío genérico de posición
   void enviarPosicion(const char *tipo, long valor)
   {
@@ -377,17 +350,48 @@ public:
   }
 
   // Envía configuración inicial de la prueba
+  // ✅ StaticJsonDocument aumentado a 256 para que el double no se trunque
   void enviarConfiguracionPrueba()
   {
-    StaticJsonDocument<128> doc;
-
+    StaticJsonDocument<256> doc; // ← Era 128
+ 
     doc["motor"] = 3;
     doc["estado"] = "config";
     doc["ciclos"] = ciclosTotales;
     doc["tiempoEstimado"] = calcularTiempoEstimado();
-
+ 
     serializeJson(doc, Serial);
     Serial.println();
+  }
+
+  // Calcula tiempo estimado de la prueba en segundos
+  // ✅ Cast ANTES de dividir para no perder precisión en uint64_t
+  double calcularTiempoEstimado()
+  {
+    long distanciaBase = abs(posicionFinal - posicionInicio);
+    if (distanciaBase == 0 || velocidadPrueba == 0)
+      return 0;
+ 
+    uint64_t tPulso = calcularTiempoEntrePulsos(velocidadPrueba);
+ 
+    uint64_t tiempoPorPaso = tPulso * 2ULL;
+ 
+    long posicionActual = getPosicion();
+    long distanciaInicial = abs(posicionActual - posicionInicio);
+ 
+    uint64_t tiempoInicial =
+        (uint64_t)distanciaInicial * tiempoPorPaso;
+ 
+    uint64_t tiempoPorCiclo =
+        (uint64_t)(2LL * distanciaBase) * tiempoPorPaso;
+ 
+    uint64_t tiempoTotal =
+        tiempoInicial +
+        ((uint64_t)ciclosTotales * tiempoPorCiclo);
+ 
+    // ✅ Cast a double ANTES de dividir (antes era: (float)(tiempoTotal / 1000000.0)
+    //    que hacía la división en enteros y perdía decimales en valores grandes)
+    return (double)tiempoTotal / 1000000.0;
   }
 
   // Lógica principal de la prueba
@@ -534,7 +538,8 @@ void loop()
       }
       else if (accion == "startTest")
       {
-        int velocidad = doc["velocidad"];
+        float velocidadLineal = doc["velocidad"];
+        float velocidad = velocidadLineal * 0.15;
         int ciclos = doc["ciclos"];
         prueba1.setPrueba(velocidad, ciclos);
       }

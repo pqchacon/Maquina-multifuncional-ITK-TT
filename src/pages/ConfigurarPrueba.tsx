@@ -184,10 +184,10 @@ function ConfigurarPrueba() {
     }
 
     if (name === "velocidad") {
-      if (num < 1 || num > 50) {
+      if (num < 0.01 || num > 50) {
         setInputErrors((prev) => ({
           ...prev,
-          velocidad: "La velocidad debe estar entre 1 y 50",
+          velocidad: "La velocidad debe estar entre 0.01 y 50",
         }));
       } else {
         setInputErrors((prev) => ({ ...prev, velocidad: "" }));
@@ -199,10 +199,42 @@ function ConfigurarPrueba() {
      TECLADO NUMÉRICO
   ================================== */
 
+  const sanitizeValue = (value: string, decimals?: number) => {
+    // Si NO se permiten decimales
+    if (decimals === undefined) {
+      return value.replace(/\D/g, "");
+    }
+
+    // Solo números y punto
+    value = value.replace(/[^0-9.]/g, "");
+
+    // Evitar múltiples puntos
+    const parts = value.split(".");
+
+    if (parts.length > 2) {
+      value = parts[0] + "." + parts.slice(1).join("");
+    }
+
+    // Limitar cantidad de decimales
+    if (value.includes(".")) {
+      const [integer, decimal] = value.split(".");
+      value = `${integer}.${decimal.slice(0, decimals)}`;
+    }
+
+    return value;
+  };
+
   const handleKeyPress = (key: string) => {
     if (!activeInput) return;
 
-    const newValue = inputs[activeInput] + key;
+    const decimalConfig: Record<string, number | undefined> = {
+      ciclos: undefined,
+      velocidad: 1,
+    };
+
+    const rawValue = inputs[activeInput] + key;
+
+    const newValue = sanitizeValue(rawValue, decimalConfig[activeInput]);
 
     setInputs((prev) => ({
       ...prev,
@@ -223,17 +255,6 @@ function ConfigurarPrueba() {
     }));
 
     validarInput(activeInput, newValue);
-  };
-
-  const handleEnter = () => {
-    // Cerrar teclado
-    setActiveInput(null);
-
-    setTimeout(() => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    }, 0);
   };
 
   /* ================================
@@ -410,6 +431,7 @@ function ConfigurarPrueba() {
                   name="ciclos"
                   placeholder="Número de Ciclos"
                   value={inputs.ciclos}
+                  decimals={0}
                   onFocus={() => setActiveInput("ciclos")}
                   readOnly
                   error={inputErrors.ciclos}
@@ -418,8 +440,9 @@ function ConfigurarPrueba() {
 
                 <Input
                   name="velocidad"
-                  placeholder="Velocidad"
+                  placeholder="Velocidad (mm/s)"
                   value={inputs.velocidad}
+                  decimals={1}
                   onFocus={() => setActiveInput("velocidad")}
                   readOnly
                   error={inputErrors.velocidad}
@@ -442,11 +465,7 @@ function ConfigurarPrueba() {
 
         {/* TECLADO */}
         {activeInput && (
-          <Keyboard
-            onKeyPress={handleKeyPress}
-            onBackspace={handleBackspace}
-            onEnter={handleEnter}
-          />
+          <Keyboard onKeyPress={handleKeyPress} onBackspace={handleBackspace} />
         )}
       </main>
     </>
