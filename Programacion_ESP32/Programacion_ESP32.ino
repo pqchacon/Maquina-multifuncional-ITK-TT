@@ -1,6 +1,18 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+namespace
+{
+  // MAcros para el motor del impulsor
+  constexpr int PIN_MOTOR_IMPULSOR = 26;  // indicar cuál es el pin libre para contorlar este motor
+  constexpr int PIN_MOTOR_DIR = 27;       // indicar cuál es el pin libre para la dirección
+  constexpr int PIN_MOTOR_ENABLE = 14;    // es posible que se pueda utilizar un mismo pin de otro para este
+  constexpr int MOTOR_MICRO = 800;         // Confirmar si es el mismo
+  constexpr int MOTOR_RED = 1;            // Motor red
+  constexpr int MOTOR_FINH = 0;          // finH
+  constexpr int MOTOR_FINAH = 0;         // finah
+}
+
 /* =========================================================
                         CLASE MOTOR
     Clase base que controla un motor paso a paso mediante
@@ -461,6 +473,7 @@ public:
 
 Motor motor1(19, 18, 17, 800, 1, 16, 15); //Motor Torre
 Motor motor2(23, 22, 21, 800, 1, 35, 5);  //Motor Mesa
+Motor motor_impulsor(PIN_MOTOR_IMPULSOR, PIN_MOTOR_DIR, PIN_MOTOR_ENABLE, MOTOR_MICRO, MOTOR_RED, MOTOR_FINH, MOTOR_FINAH); // Motor impulsor
 Prueba prueba1(32, 33, 25, 800, 20);
 
 /* ========================================================= */
@@ -572,11 +585,23 @@ void loop()
         prueba1.detener();
       }
     }
+    else if (motor == 4)
+    {
+      if(accion == "move")
+      {
+        motor_impulsor.iniciarContinuo(100, true);
+      }
+      else if (accion == "stop")
+      {
+        motor_impulsor.detener();
+      }
+    }
   }
 
   prueba1.ejecutarPrueba();
 
   motor1.actualizar();
   motor2.actualizar();
+  motor_impulsor.actualizar();
   prueba1.actualizar();
 }
