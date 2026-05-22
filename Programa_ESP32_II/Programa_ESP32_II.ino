@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ESP32Servo.h>
 
 // --------------------------------------------------------------
 //              MACROS PARA EL MOTOR DEL IMPULSOR (DISPENSADOR)
@@ -18,7 +19,18 @@ namespace
     // macros para el movimiento continuo
     constexpr float VEL_RPM = 100;              // velocidad del motor
     constexpr bool SEN_HOR = true;              // indica el sentido
+
+    // macros para el control del sensor de presencia
+    constexpr uint8_t PIN_SENSOR = 18;          // pin al que irá conectado el sensor de presencia (para saber si hay palillos)
+
+    // macros para el control del servo
+    constexpr uint8_t PIN_SERVO = 15;                 // pin para controlar el servomotor
+    constexpr uint16_t TIEMPO_ACTIVACION = 5000;      // Tiempo (ms) para accionar el servomotor
+    constexpr uint16_t TIEMPO_ESPERA = 1000;          // Tiempo (ms) de espera para accionar el motor
+    constexpr uint8_t ANGULO_SERVO = 90;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
 }
+
+long int TIEMPO_ANTERIOR = 0;
 /* =========================================================
                         CLASE MOTOR
     Clase base que controla un motor paso a paso mediante
@@ -227,15 +239,28 @@ public:
 };
 
 Motor impulsor(PIN_PUL, PIN_DIR, PIN_ENA, MOTOR_MICROSTEPS, MOTOR_REDUCTOR, MOTOR_finH, MOTOR_finAH);
+Servo servomotor;
 
 void setup()
 {
-
+  servomotor.attach(PIN_SERVO);
+  pinMode(PIN_SENSOR, INPUT_PULLUP);
 }
 
 void loop()
 {
     // por ahora, siempre está en continuo movimiento
     impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
+    if(millis() - TIEMPO_ANTERIOR >= TIEMPO_ACTIVACION)
+    {
+      servomotor.write(ANGULO_SERVO);
+      TIEMPO_ANTERIOR = millis();
+      while(millis() - TIEMPO_ANTERIOR < TIEMPO_ESPERA)
+      {
+        // Espera a que el servo empuje el palillo
+      }
+      TIEMPO_ANTERIOR = millis();
+    }
+    else servomotor.write(0);
     impulsor.actualizar();
 }
