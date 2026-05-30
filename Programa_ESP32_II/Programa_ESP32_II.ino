@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+// librerías para el sensor de vuelo
+#include <Wire.h>
+#include <VL53L0X.h>
 
 // --------------------------------------------------------------
-//              MACROS PARA EL MOTOR DEL IMPULSOR (DISPENSADOR)
+//                        MACROS 
 // --------------------------------------------------------------
 namespace
 {
@@ -21,16 +24,23 @@ namespace
     constexpr bool SEN_HOR = true;              // indica el sentido
 
     // macros para el control del sensor de presencia
-    constexpr uint8_t PIN_SENSOR = 18;          // pin al que irá conectado el sensor de presencia (para saber si hay palillos)
+    constexpr uint8_t PIN_SENSOR = 18;          // pin al que irá conectado el sensor de presencia (para saber si hay palillos en la tolva)
 
     // macros para el control del servo
     constexpr uint8_t PIN_SERVO = 15;                 // pin para controlar el servomotor
-    constexpr uint16_t TIEMPO_ACTIVACION = 5000;      // Tiempo (ms) para accionar el servomotor
-    constexpr uint16_t TIEMPO_ESPERA = 1000;          // Tiempo (ms) de espera para accionar el motor
-    constexpr uint8_t ANGULO_SERVO = 90;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
+    constexpr uint16_t TIEMPO_ACTIVACION = 500;      // Tiempo (ms) para accionar el servomotor
+    constexpr uint8_t ANGULO_SERVO_INICIAL = 0;             // angulo inicial del servo
+    constexpr uint8_t ANGULO_SERVO_FINAL = 90;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
+    
+    // macros para el sensor de tiempo de vuelo
+    constexpr uint8_t PIN_I2C_SDA = 21;
+    constexpr uint8_t PIN_I2C_SCL = 22;
+    constexpr uint16_t DISTANCIA_TIJERAS = 100;       // distancia que medirá más o menos el sensor para saber si hay algo dentro de ese rango. [10 cm] 
+
+    // macro para el control del LED interno de la placa de desarrollo
+    constexpr uint8_t PIN_LED = 2;
 }
 
-long int TIEMPO_ANTERIOR = 0;
 /* =========================================================
                         CLASE MOTOR
     Clase base que controla un motor paso a paso mediante
@@ -240,27 +250,64 @@ public:
 
 Motor impulsor(PIN_PUL, PIN_DIR, PIN_ENA, MOTOR_MICROSTEPS, MOTOR_REDUCTOR, MOTOR_finH, MOTOR_finAH);
 Servo servomotor;
+VL53L0X tof_sensor;
+
+// Funcion de interrupcion para activar el servomotor cuando no hay ningún palillo según el 
+// sensor infrarrojo de presencia ubicado dentro de la tolva.
+void activacion_servomotor_ISR(void)
+{
+  servomotor.write(ANGULO_SERVO_FINAL);
+  uint32_t TIEMPO_ANTERIOR = millis();
+  while(millis() - TIEMPO_ANTERIOR >= TIEMPO_ACTIVACION)
+  {
+    // no hacer nada
+  }
+  servomotor.write(ANGULO_SERVO_INICIAL);
+  return;
+}
 
 void setup()
 {
+  // servomotor
   servomotor.attach(PIN_SERVO);
-  pinMode(PIN_SENSOR, INPUT_PULLUP);
+
+  // time of flight sensor
+  pinMode(PIN_LED, OUTPUT);
+  Wire.begin (PIN_I2C_SDA, PIN_I2C_SCL);
+  tof_sensor.setTimeout(500);
+  if(!tof_sensor.init())
+  {
+    // no se detectó el sensor de vuelo
+    while(1)
+    {
+      digitalWrite(PIN_LED, true);
+      delay(500);
+      digitalWrite(PIN_LED, false);
+      delay(500);
+      // será necesario reiniciar el uC.
+    }
+  }
+
+  // interrupcion para cuando no haya palillos. Será necesario checar si se queda con RISING o FALLING
+  attachInterrupt(digitalPinToInterrupt(PIN_SENSOR), activacion_servomotor_ISR, FALLING);
 }
 
 void loop()
 {
-    // por ahora, siempre está en continuo movimiento
-    impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
-    if(millis() - TIEMPO_ANTERIOR >= TIEMPO_ACTIVACION)
-    {
-      servomotor.write(ANGULO_SERVO);
-      TIEMPO_ANTERIOR = millis();
-      while(millis() - TIEMPO_ANTERIOR < TIEMPO_ESPERA)
-      {
-        // Espera a que el servo empuje el palillo
-      }
-      TIEMPO_ANTERIOR = millis();
-    }
-    else servomotor.write(0);
-    impulsor.actualizar();
+  int distancia = tof_sensor.readRangeSingleMillimeters();
+  if(DISTANCIA_TIJERAS >= distancia)
+  {
+    // esto quiere decir que hay algo que está detectando en menos de 10 cm. 
+    // Por lo tanto, va a estar activando el motor a pasos hasta que deje de detectar algo en menos de 10 cm. 
+    // Estos 10 cm tendrán que ser modificados, por ahora solamente es cuestión de ve si compila el código.
+    // impulsor.iniciarContinuo(VEL_RPM, true);
+    impulsor.detener();
+  }
+  else
+  {
+    // debido a que no se está detectando nada, se estará moviendo el motor.
+    // impulsor.detener();
+    impulsor.iniciarContinuo(VEL_RPM, true);
+  }
+  impulsor.actualizar();
 }
