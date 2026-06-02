@@ -184,6 +184,14 @@ function ConfigurarPrueba() {
     }
 
     if (name === "velocidad") {
+      if (value === "." || value.endsWith(".")) {
+        setInputErrors((prev) => ({
+          ...prev,
+          velocidad: "Ingresa un valor decimal válido",
+        }));
+        return;
+      }
+
       if (num < 0.01 || num > 50) {
         setInputErrors((prev) => ({
           ...prev,
@@ -279,6 +287,8 @@ function ConfigurarPrueba() {
         console.error("Error parseando JSON:", err);
       }
     });
+
+    window.api.rendererReady();
 
     return () => unsubscribe();
   }, []);

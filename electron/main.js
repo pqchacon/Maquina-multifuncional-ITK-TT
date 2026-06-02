@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
+import { io } from "socket.io-client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,12 +29,70 @@ ipcMain.on("renderer-ready", () => {
     "mensajes",
   );
 
-  // Enviar todos los mensajes que llegaron antes de que el renderer estuviera listo
   messageQueue.forEach((msg) => {
     mainWindow?.webContents.send("serial-data", msg);
   });
   messageQueue = [];
 });
+
+// ===============================
+// Cliente Socket.IO
+// ===============================
+
+const SERVIDOR_URL = "http://192.168.120.56:5000";
+
+let socket = null;
+
+function setupSocketIO() {
+  socket = io(SERVIDOR_URL, {
+    reconnection: true,
+    reconnectionDelay: 3000,
+    reconnectionAttempts: Infinity,
+  });
+
+  socket.on("connect", () => {
+    console.log("[SOCKET] Conectado al servidor:", SERVIDOR_URL);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log("[SOCKET] Desconectado del servidor:", reason);
+  });
+
+  socket.on("connect_error", (err) => {
+    console.error("[SOCKET] Error de conexion:", err.message);
+  });
+
+  // -------------------------------------------------------
+  // SERVIDOR → RASPBERRY
+  // El servidor reenvía comandos que mandó la app móvil.
+  // La Raspberry los escribe al serial para que los ejecute la ESP32.
+  // -------------------------------------------------------
+  socket.on("mensajeMultifuncional", (data) => {
+    console.log("[SOCKET] Comando recibido del servidor:", data);
+
+    const comando = data?.mensaje ?? data;
+
+    if (!comando) return;
+
+    const jsonString = JSON.stringify(comando);
+
+    // Escribir al serial (va a la ESP32)
+    if (port?.isOpen) {
+      console.log("[SERIAL] Enviando a ESP32:", jsonString);
+      port.write(jsonString + "\n");
+    } else {
+      console.warn(
+        "[SERIAL] Puerto no disponible, comando descartado:",
+        jsonString,
+      );
+    }
+
+    // También actualizar la UI local de Electron
+    if (rendererReady) {
+      mainWindow?.webContents.send("serial-data", jsonString);
+    }
+  });
+}
 
 // ===============================
 // Crear ventana
@@ -49,7 +108,7 @@ function createWindow() {
     },
   });
 
-  // Resetear rendererReady cada vez que se crea o recarga la ventana
+  // Resetear rendererReady cada vez que se recarga la ventana
   mainWindow.webContents.on("did-start-loading", () => {
     rendererReady = false;
     messageQueue = [];
@@ -75,7 +134,6 @@ async function getSerialPath() {
 
     if (!ports.length) return null;
 
-    // 🔹 Prioridad Linux (Raspberry)
     if (!isWindows) {
       const preferred =
         ports.find((p) => p.path.includes("ttyUSB")) ||
@@ -85,7 +143,6 @@ async function getSerialPath() {
       return preferred.path;
     }
 
-    // 🔹 Windows
     return ports[0].path;
   } catch (error) {
     console.error("Error listando puertos:", error);
@@ -105,7 +162,6 @@ async function setupSerial() {
       "serial-error",
       "No se encontró puerto serial",
     );
-
     setTimeout(setupSerial, 3000);
     return;
   }
@@ -124,7 +180,6 @@ async function setupSerial() {
     if (err) {
       console.error("Error abriendo puerto:", err.message);
       mainWindow?.webContents.send("serial-error", err.message);
-
       setTimeout(setupSerial, 3000);
       return;
     }
@@ -138,8 +193,6 @@ async function setupSerial() {
   port.on("close", () => {
     console.log("Puerto cerrado");
     mainWindow?.webContents.send("serial-status", "closed");
-
-    // 🔁 Reconexión automática
     setTimeout(setupSerial, 3000);
   });
 
@@ -158,18 +211,32 @@ async function setupSerial() {
 
     console.log(`[SERIAL RAW] ${Date.now()} → ${received}`);
 
-    // ✅ Si el renderer no está listo, encolar el mensaje en lugar de perderlo
+    // Canal 1: UI local de Electron
     if (rendererReady) {
       mainWindow?.webContents.send("serial-data", received);
     } else {
       console.log("[MAIN] Renderer no listo, encolando:", received);
       messageQueue.push(received);
     }
+
+    // Canal 2: Servidor Socket.IO
+    // Solo reenviar mensajes JSON válidos de motor 3
+    // (posición, config, cycle, finished)
+    try {
+      const parsed = JSON.parse(received);
+
+      if (parsed.motor === 3 && socket?.connected) {
+        console.log("[SOCKET] Enviando al servidor:", parsed);
+        socket.emit("datos_espMultifuncional", parsed);
+      }
+    } catch (_) {
+      // Mensajes de texto plano como "Prueba terminada manualmente" — ignorar para socket
+    }
   });
 }
 
 // ===============================
-// Enviar datos al serial
+// Enviar datos al serial desde la UI local
 // ===============================
 ipcMain.on("send-serial", (_, data) => {
   if (port?.isOpen) {
@@ -187,6 +254,7 @@ ipcMain.on("send-serial", (_, data) => {
 app.whenReady().then(() => {
   createWindow();
   setupSerial();
+  setupSocketIO();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -204,5 +272,9 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   if (port?.isOpen) {
     port.close();
+  }
+
+  if (socket?.connected) {
+    socket.disconnect();
   }
 });

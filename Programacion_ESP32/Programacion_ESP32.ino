@@ -354,12 +354,12 @@ public:
   void enviarConfiguracionPrueba()
   {
     StaticJsonDocument<256> doc; // ← Era 128
- 
+
     doc["motor"] = 3;
     doc["estado"] = "config";
     doc["ciclos"] = ciclosTotales;
     doc["tiempoEstimado"] = calcularTiempoEstimado();
- 
+
     serializeJson(doc, Serial);
     Serial.println();
   }
@@ -371,24 +371,24 @@ public:
     long distanciaBase = abs(posicionFinal - posicionInicio);
     if (distanciaBase == 0 || velocidadPrueba == 0)
       return 0;
- 
+
     uint64_t tPulso = calcularTiempoEntrePulsos(velocidadPrueba);
- 
+
     uint64_t tiempoPorPaso = tPulso * 2ULL;
- 
+
     long posicionActual = getPosicion();
     long distanciaInicial = abs(posicionActual - posicionInicio);
- 
+
     uint64_t tiempoInicial =
         (uint64_t)distanciaInicial * tiempoPorPaso;
- 
+
     uint64_t tiempoPorCiclo =
         (uint64_t)(2LL * distanciaBase) * tiempoPorPaso;
- 
+
     uint64_t tiempoTotal =
         tiempoInicial +
         ((uint64_t)ciclosTotales * tiempoPorCiclo);
- 
+
     // ✅ Cast a double ANTES de dividir (antes era: (float)(tiempoTotal / 1000000.0)
     //    que hacía la división en enteros y perdía decimales en valores grandes)
     return (double)tiempoTotal / 1000000.0;
@@ -459,8 +459,8 @@ public:
                         INSTANCIAS
 ========================================================= */
 
-Motor motor1(19, 18, 17, 800, 1, 16, 15); //Motor Torre
-Motor motor2(23, 22, 21, 800, 1, 35, 5);  //Motor Mesa
+Motor motor1(19, 18, 17, 800, 1, 16, 15); // Motor Torre
+Motor motor2(23, 22, 21, 800, 1, 35, 5);  // Motor Mesa
 Prueba prueba1(32, 33, 25, 800, 20);
 
 /* ========================================================= */
