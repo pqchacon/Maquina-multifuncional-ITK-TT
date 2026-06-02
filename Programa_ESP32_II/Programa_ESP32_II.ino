@@ -9,7 +9,7 @@
 //                        MACROS 
 // --------------------------------------------------------------
 
-#define INFRARROJO_SEN
+// #define INFRARROJO_SEN
 #ifndef INFRARROJO_SEN
   #define SENSORVUELO
 #endif
@@ -34,7 +34,7 @@ namespace
 
     // macros para el control del servo
     constexpr uint8_t PIN_SERVO = 15;                 // pin para controlar el servomotor
-    constexpr uint16_t TIEMPO_ACTIVACION = 500;      // Tiempo (ms) para accionar el servomotor
+    constexpr uint16_t TIEMPO_ACTIVACION = 1000;    // Tiempo (ms) para accionar el servomotor
     constexpr uint8_t ANGULO_SERVO_INICIAL = 0;             // angulo inicial del servo
     constexpr uint8_t ANGULO_SERVO_FINAL = 90;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
 #ifdef SENSORVUELO
@@ -49,6 +49,12 @@ namespace
     // macro para el control del LED interno de la placa de desarrollo
     constexpr uint8_t PIN_LED = 2;
 }
+
+// variables globales
+volatile bool bandera_interrupcion = false;
+volatile bool bandera_una_vez = false;
+uint32_t TIEMPO_ACTUAL = 0;
+
 
 /* =========================================================
                         CLASE MOTOR
@@ -259,22 +265,41 @@ public:
 
 Motor impulsor(PIN_PUL, PIN_DIR, PIN_ENA, MOTOR_MICROSTEPS, MOTOR_REDUCTOR, MOTOR_finH, MOTOR_finAH);
 Servo servomotor;
+#ifdef SENSORVUELO
 VL53L0X tof_sensor;
+#endif //SENSORVUELO
 
 // Funcion de interrupcion para activar el servomotor cuando no hay ningún palillo según el 
 // sensor infrarrojo de presencia ubicado dentro de la tolva.
 void activacion_servomotor_ISR(void)
 {
-  Serial.println("Se entró a la interrupcion");
-  servomotor.write(ANGULO_SERVO_FINAL);
-  uint32_t TIEMPO_ANTERIOR = millis();
-  while(millis() - TIEMPO_ANTERIOR <= TIEMPO_ACTIVACION)
-  {
-    // no hacer nada
-  }
-  servomotor.write(ANGULO_SERVO_INICIAL);
-  Serial.println("Se salio del bucle While");
+  bandera_interrupcion = true;
+  bandera_una_vez = true;
   return;
+}
+
+void mover_servomotor(void)
+{
+  if(bandera_interrupcion)
+  {
+    if(bandera_una_vez)
+    {
+      servomotor.write(ANGULO_SERVO_FINAL);
+      TIEMPO_ACTUAL = millis();
+      bandera_una_vez = false;
+      Serial.println("Se inició");
+    }
+    else
+    {
+      Serial.println(TIEMPO_ACTUAL);
+    }
+    if(millis() - TIEMPO_ACTUAL >= TIEMPO_ACTIVACION)
+    {
+      servomotor.write(ANGULO_SERVO_INICIAL);
+      bandera_interrupcion = false;
+      Serial.println("Se regresó");
+    }
+  }
 }
 
 void setup()
@@ -282,13 +307,13 @@ void setup()
   Serial.begin(115200);
   // servomotor
   servomotor.attach(PIN_SERVO);
-
+  servomotor.write(ANGULO_SERVO_INICIAL);
   // interrupcion para cuando no haya palillos. Será necesario checar si se queda con RISING o FALLING
   attachInterrupt(digitalPinToInterrupt(PIN_SENSOR), activacion_servomotor_ISR, FALLING);
   pinMode(PIN_LED, OUTPUT);
 #ifdef SENSORVUELO
 // time of flight sensor
-  Serial.println("Se inicializó el sensor de vuelo.");
+  Serial.println("Se inició el modo con el sensor de vuelo.");
   Wire.begin (PIN_I2C_SDA, PIN_I2C_SCL);
   tof_sensor.setTimeout(500);
   if(!tof_sensor.init())
@@ -296,6 +321,7 @@ void setup()
     // no se detectó el sensor de vuelo
     while(1)
     {
+      Serial.println("Es necesario reiniciar el micro.\nNo se detectó el sensor de tiempo de vuelo conectado.");
       digitalWrite(PIN_LED, true);
       delay(500);
       digitalWrite(PIN_LED, false);
@@ -303,9 +329,10 @@ void setup()
       // será necesario reiniciar el uC.
     }
   }
+  Serial.println("La distancia actual de medición es de 10cm.\nSi hay cualquier objeto en el rango de visión del sensor, parará el motor!\n");
 #endif //SENSORVUELO
 #ifdef INFRARROJO_SEN
-  Serial.println("Se inicializó el sensor infrarrojo.");
+  Serial.println("Se inició el modo con el sensor infrarrojo.");
   pinMode(PIN_INFRARROJO, INPUT);
 #endif
 }
@@ -316,31 +343,27 @@ void loop()
   int distancia = tof_sensor.readRangeSingleMillimeters();
   if(DISTANCIA_TIJERAS >= distancia)
   {
-    // esto quiere decir que hay algo que está detectando en menos de 10 cm. 
-    // Por lo tanto, va a estar activando el motor a pasos hasta que deje de detectar algo en menos de 10 cm. 
-    // Estos 10 cm tendrán que ser modificados, por ahora solamente es cuestión de ve si compila el código.
-    // impulsor.iniciarContinuo(VEL_RPM, true);
     impulsor.detener();
+    Serial.println("Deteniendo");
   }
   else
   {
-    // debido a que no se está detectando nada, se estará moviendo el motor.
-    // impulsor.detener();
     impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
+    Serial.println("Avanzando");
   }
-  impulsor.actualizar();
 #endif  //sensorvuelo
 #ifdef INFRARROJO_SEN
   if(digitalRead(PIN_INFRARROJO))
   {
     impulsor.detener();
-    Serial.println("deteniendo");
+    Serial.println("Deteniendo");
   }
   else
   {
     impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
-    Serial.println("avanzando");
+    Serial.println("Avanzando");
   }
-  impulsor.actualizar();
 #endif //infrarrojo_sen
+  impulsor.actualizar();
+  mover_servomotor();
 }
