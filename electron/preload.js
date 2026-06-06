@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 // Canales permitidos
-const validSendChannels = ["send-serial", "renderer-ready"];
+const validSendChannels = ["send-serial", "renderer-ready", "shutdown-system"];
 const validReceiveChannels = ["serial-data", "serial-error", "serial-status"];
 
 contextBridge.exposeInMainWorld("api", {
@@ -20,6 +20,13 @@ contextBridge.exposeInMainWorld("api", {
   // ===============================
   rendererReady: () => {
     ipcRenderer.send("renderer-ready");
+  },
+
+  // ===============================
+  // Apagar el sistema operativo
+  // ===============================
+  shutdownSystem: () => {
+    ipcRenderer.send("shutdown-system");
   },
 
   // ===============================

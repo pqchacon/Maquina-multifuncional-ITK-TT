@@ -1,12 +1,14 @@
+import { useRef, useContext } from "react";
 import NavigateButton from "../components/Buttons/NavigateButton";
 import Footer from "../components/Footert";
+import Modal from "../components/Modal";
 import IntertekLogoClaro from "../assets/LogoIntertekClaro.svg";
 import IntertekLogoOscuro from "../assets/LogoIntertekOscuro.svg";
-import { useContext } from "react";
 import { temaOscuro, ThemeContext } from "../App";
 
 function Home() {
   const { theme } = useContext(ThemeContext);
+  const shutdownModalRef = useRef<HTMLDialogElement>(null);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -28,9 +30,14 @@ function Home() {
           </NavigateButton>
         </div>
       </div>
+
       {/* FOOTER ABAJO */}
-      <Footer />
+      <Footer onShutdown={() => shutdownModalRef.current?.showModal()} />
+
+      {/* MODAL DE CONFIRMACIÓN DE APAGADO */}
+      <Modal ref={shutdownModalRef} mode="shutdown" />
     </div>
   );
 }
+
 export default Home;

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { exec } from "child_process";
 import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
 import { io } from "socket.io-client";
@@ -33,6 +34,26 @@ ipcMain.on("renderer-ready", () => {
     mainWindow?.webContents.send("serial-data", msg);
   });
   messageQueue = [];
+});
+
+// ===============================
+// Apagar el sistema (Windows o Linux)
+// ===============================
+ipcMain.on("shutdown-system", () => {
+  const command = isWindows ? "shutdown /s /t 5" : "sudo shutdown -h now";
+  console.log("[MAIN] Apagando sistema con comando:", command);
+
+  // Cerrar puerto serial limpiamente antes de apagar
+  if (port?.isOpen) {
+    port.close();
+  }
+  if (socket?.connected) {
+    socket.disconnect();
+  }
+
+  exec(command, (err) => {
+    if (err) console.error("[MAIN] Error al apagar:", err.message);
+  });
 });
 
 // ===============================
