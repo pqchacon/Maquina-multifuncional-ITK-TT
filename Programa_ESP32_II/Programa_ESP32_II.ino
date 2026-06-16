@@ -9,11 +9,6 @@
 //                        MACROS 
 // --------------------------------------------------------------
 
-// #define INFRARROJO_SEN
-#ifndef INFRARROJO_SEN
-  #define SENSORVUELO
-#endif
-
 namespace
 {
     // macros para la instancia del motor
@@ -29,30 +24,28 @@ namespace
     constexpr float VEL_RPM = 100;              // velocidad del motor
     constexpr bool SEN_HOR = true;              // indica el sentido
 
-    // macros para el control del sensor de presencia en la tolva
-    constexpr uint8_t PIN_SENSOR = 18;          // pin al que irá conectado el sensor de presencia (para saber si hay palillos en la tolva)
-
     // macros para el control del servo
     constexpr uint8_t PIN_SERVO = 15;                 // pin para controlar el servomotor
     constexpr uint16_t TIEMPO_ACTIVACION = 1000;    // Tiempo (ms) para accionar el servomotor
-    constexpr uint8_t ANGULO_SERVO_INICIAL = 0;             // angulo inicial del servo
-    constexpr uint8_t ANGULO_SERVO_FINAL = 90;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
-#ifdef SENSORVUELO
+    constexpr uint8_t ANGULO_PARADO = 90;             // angulo inicial del servo
+    constexpr uint8_t GIRO_DERECHA = 120;              // Angulo al que llega el servo (está en función de la longitud del mecanismo)
+    constexpr uint8_t GIRO_IZQUIERDA = 60;              // Angulo para gire al otro sentido
+
     // macros para el sensor de tiempo de vuelo
+    constexpr uint8_t PINXSHUT = 16;                  // pin para la selección de dispositivo
     constexpr uint8_t PIN_I2C_SDA = 21;
     constexpr uint8_t PIN_I2C_SCL = 22;
-    constexpr uint16_t DISTANCIA_TIJERAS = 100;       // distancia que medirá más o menos el sensor para saber si hay algo dentro de ese rango. [10 cm] 
-#endif  //SENSORVUELO
-#ifdef INFRARROJO_SEN
-    constexpr uint8_t PIN_INFRARROJO = 17;
-#endif  //INFRARROJO_SEN
-    // macro para el control del LED interno de la placa de desarrollo
+    constexpr uint32_t DISTANCIA_TIJERAS = 100;       // distancia que medirá más o menos el sensor para saber si hay algo dentro de ese rango. [10 cm] 
+    constexpr uint8_t DISTANCIA_TOLVA = 100;         // distancia mínima para la tolva 
     constexpr uint8_t PIN_LED = 2;
 }
 
 // variables globales
 volatile bool bandera_interrupcion = false;
 volatile bool bandera_una_vez = false;
+volatile bool primera_bandera = false;
+volatile bool bandera_giro = false;
+volatile bool bandera_segunda_vez = false;
 uint32_t TIEMPO_ACTUAL = 0;
 
 
@@ -265,18 +258,12 @@ public:
 
 Motor impulsor(PIN_PUL, PIN_DIR, PIN_ENA, MOTOR_MICROSTEPS, MOTOR_REDUCTOR, MOTOR_finH, MOTOR_finAH);
 Servo servomotor;
-#ifdef SENSORVUELO
-VL53L0X tof_sensor;
-#endif //SENSORVUELO
+
+VL53L0X palillos;
+VL53L0X tolva;
 
 // Funcion de interrupcion para activar el servomotor cuando no hay ningún palillo según el 
 // sensor infrarrojo de presencia ubicado dentro de la tolva.
-void activacion_servomotor_ISR(void)
-{
-  bandera_interrupcion = true;
-  bandera_una_vez = true;
-  return;
-}
 
 void mover_servomotor(void)
 {
@@ -284,20 +271,33 @@ void mover_servomotor(void)
   {
     if(bandera_una_vez)
     {
-      servomotor.write(ANGULO_SERVO_FINAL);
+      servomotor.write(GIRO_DERECHA);
       TIEMPO_ACTUAL = millis();
       bandera_una_vez = false;
-      Serial.println("Se inició");
+      bandera_segunda_vez = true;
+      // Serial.println("Se inició");
     }
-    else
+
+    if(millis() - TIEMPO_ACTUAL >= TIEMPO_ACTIVACION && bandera_una_vez == false && bandera_segunda_vez)
     {
-      Serial.println(TIEMPO_ACTUAL);
+      servomotor.write(GIRO_IZQUIERDA);
+      bandera_giro = true;
+      bandera_segunda_vez = false;
+      TIEMPO_ACTUAL = millis();
+      // bandera_interrupcion = false;
+      // Serial.println("Se regresó");
     }
-    if(millis() - TIEMPO_ACTUAL >= TIEMPO_ACTIVACION)
+
+    if(bandera_giro)
     {
-      servomotor.write(ANGULO_SERVO_INICIAL);
-      bandera_interrupcion = false;
-      Serial.println("Se regresó");
+      // TIEMPO_ACTUAL = millis();
+      if(millis() - TIEMPO_ACTUAL >= TIEMPO_ACTIVACION)
+      {
+        servomotor.write(ANGULO_PARADO);
+        bandera_interrupcion = false;
+        bandera_giro = false;
+      }
+      
     }
   }
 }
@@ -305,43 +305,52 @@ void mover_servomotor(void)
 void setup()
 {
   Serial.begin(115200);
+
   // servomotor
   servomotor.attach(PIN_SERVO);
-  servomotor.write(ANGULO_SERVO_INICIAL);
+  servomotor.write(ANGULO_PARADO);
+
   // interrupcion para cuando no haya palillos. Será necesario checar si se queda con RISING o FALLING
-  attachInterrupt(digitalPinToInterrupt(PIN_SENSOR), activacion_servomotor_ISR, FALLING);
   pinMode(PIN_LED, OUTPUT);
-#ifdef SENSORVUELO
+
 // time of flight sensor
-  Serial.println("Se inició el modo con el sensor de vuelo.");
   Wire.begin (PIN_I2C_SDA, PIN_I2C_SCL);
-  tof_sensor.setTimeout(500);
-  if(!tof_sensor.init())
-  {
-    // no se detectó el sensor de vuelo
-    while(1)
-    {
-      Serial.println("Es necesario reiniciar el micro.\nNo se detectó el sensor de tiempo de vuelo conectado.");
-      digitalWrite(PIN_LED, true);
-      delay(500);
-      digitalWrite(PIN_LED, false);
-      delay(500);
-      // será necesario reiniciar el uC.
-    }
-  }
-  Serial.println("La distancia actual de medición es de 10cm.\nSi hay cualquier objeto en el rango de visión del sensor, parará el motor!\n");
-#endif //SENSORVUELO
-#ifdef INFRARROJO_SEN
-  Serial.println("Se inició el modo con el sensor infrarrojo.");
-  pinMode(PIN_INFRARROJO, INPUT);
-#endif
+  pinMode(PINXSHUT, OUTPUT);
+  digitalWrite(PINXSHUT, false);
+  Serial.println("Configurando sensor palillos como dirección 0x30...");
+  palillos.init();
+  palillos.setAddress(0x30);
+  palillos.setTimeout(500);
+
+  Serial.println("La distancia actual de medición es de 10cm para el despliegue de palillos.");
+
+  digitalWrite(PINXSHUT, true);
+  Serial.println("Configurando sensor de la tolva como dirección 0x29...");
+  tolva.init();
+  tolva.setTimeout(500);
+  Serial.println("La distancia actual de medición es de 10cm en la tolva.");
 }
 
 void loop()
 {
-#ifdef SENSORVUELO
-  int distancia = tof_sensor.readRangeSingleMillimeters();
-  if(DISTANCIA_TIJERAS >= distancia)
+  uint32_t distancia_palillos_calc = palillos.readRangeSingleMillimeters();
+  if(palillos.timeoutOccurred())
+  {
+    Serial.println("Timeout en palillos!");
+    digitalWrite(PIN_LED, !digitalRead(PIN_LED));
+  }
+  Serial.print("Distancia medida (palillos): ");
+  Serial.println(distancia_palillos_calc);
+  uint32_t distancia_tol_calc = tolva.readRangeSingleMillimeters();
+  if(tolva.timeoutOccurred())
+  {
+    Serial.println("Timeout en tolva!");
+    digitalWrite(PIN_LED, !digitalRead(PIN_LED));
+  }
+  Serial.print("Distancia medida (tolva): ");
+  Serial.println(distancia_tol_calc);
+
+  if(DISTANCIA_TIJERAS >= distancia_palillos_calc)
   {
     impulsor.detener();
     Serial.println("Deteniendo");
@@ -351,19 +360,22 @@ void loop()
     impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
     Serial.println("Avanzando");
   }
-#endif  //sensorvuelo
-#ifdef INFRARROJO_SEN
-  if(digitalRead(PIN_INFRARROJO))
+  if(DISTANCIA_TOLVA >= distancia_tol_calc)
   {
-    impulsor.detener();
-    Serial.println("Deteniendo");
+    digitalWrite(PIN_LED, true);
+    primera_bandera = true;
   }
   else
   {
-    impulsor.iniciarContinuo(VEL_RPM, SEN_HOR);
-    Serial.println("Avanzando");
+    digitalWrite(PIN_LED, false);
+    if(primera_bandera)
+    {
+      bandera_interrupcion = true;
+      bandera_una_vez = true;
+      primera_bandera = false;
+    }
   }
-#endif //infrarrojo_sen
+
   impulsor.actualizar();
   mover_servomotor();
 }
