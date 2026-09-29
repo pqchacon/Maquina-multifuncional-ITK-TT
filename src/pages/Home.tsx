@@ -22,11 +22,11 @@ function Home() {
         />
         {/* BOTONES */}
         <div className="flex flex-col gap-2">
-          <NavigateButton ruta="/configurar-prueba">
-            Configurar Prueba
-          </NavigateButton>
           <NavigateButton ruta="/posicionar-maquina">
             Posicionar Máquina
+          </NavigateButton>
+          <NavigateButton ruta="/configurar-prueba">
+            Configurar Prueba
           </NavigateButton>
         </div>
       </div>

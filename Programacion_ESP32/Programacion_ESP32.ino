@@ -10,73 +10,49 @@
 class Motor
 {
 protected:
-  // Pines de control del driver
   int PUL, DIR, ENA;
-
-  // Configuración mecánica
-  int pulsosPorRevolucion; // micropasos
-  int reduccion;           // relación de reducción
-
-  // Finales de carrera
+  int pulsosPorRevolucion;
+  int reduccion;
   int finHorario, finAntihorario;
 
-  // Control de generación de pulsos (timing)
   bool estadoPulso = LOW;
   unsigned long tiempoEntrePulsos = 0;
   unsigned long ultimoPulso = 0;
 
-  // Control de movimiento
   long pasosTotales = 0;
   long pasosRealizados = 0;
 
-  // Estado de posición
   long posicionActual = 0;
   int direccionActual = 1;
 
-  // Estados del motor
   bool enMovimiento = false;
   bool modoContinuo = false;
   bool pausado = false;
 
 public:
-  // Constructor: configura pines y parámetros del motor
   Motor(int pul, int dir, int ena, int micro, int red, int finH = -1, int finAH = -1)
   {
-    PUL = pul;
-    DIR = dir;
-    ENA = ena;
+    PUL = pul; DIR = dir; ENA = ena;
     pulsosPorRevolucion = micro;
     reduccion = red;
 
     pinMode(PUL, OUTPUT);
     pinMode(DIR, OUTPUT);
     pinMode(ENA, OUTPUT);
-
     digitalWrite(ENA, LOW);
-    if (finH != -1)
-    {
-      finHorario = finH;
-      pinMode(finHorario, INPUT);
-    }
-    else
-      finHorario = -1;
-    if (finAH != -1)
-    {
-      finAntihorario = finAH;
-      pinMode(finAntihorario, INPUT);
-    }
-    else
-      finAntihorario = -1;
+
+    finHorario = finH;
+    if (finH != -1) pinMode(finHorario, INPUT);
+
+    finAntihorario = finAH;
+    if (finAH != -1) pinMode(finAntihorario, INPUT);
   }
 
-  // Calcula el tiempo entre pulsos en microsegundos según RPM
   unsigned long calcularTiempoEntrePulsos(float rpm)
   {
-    return (unsigned long)(60000000.0 /
-                           (rpm * pulsosPorRevolucion * reduccion * 2));
+    return (unsigned long)(60000000.0 / (rpm * pulsosPorRevolucion * reduccion * 2));
   }
 
-  // Configura la dirección del giro
   void configurarDireccion(bool sentidoHorario)
   {
     digitalWrite(DIR, sentidoHorario ? HIGH : LOW);
@@ -85,59 +61,35 @@ public:
 
   bool finDeCarreraActivado()
   {
-    // Si va en sentido horario
-    if (direccionActual == 1 && finHorario != -1)
-    {
-      if (digitalRead(finHorario) == LOW)
-        return true;
-    }
-
-    // Si va en sentido antihorario
-    if (direccionActual == -1 && finAntihorario != -1)
-    {
-      if (digitalRead(finAntihorario) == LOW)
-        return true;
-    }
-
+    if (direccionActual == 1  && finHorario    != -1 && digitalRead(finHorario)    == LOW) return true;
+    if (direccionActual == -1 && finAntihorario != -1 && digitalRead(finAntihorario) == LOW) return true;
     return false;
   }
 
-  // Inicia movimiento continuo (sin límite de pasos)
   void iniciarContinuo(float rpm, bool horario)
   {
     configurarDireccion(horario);
-
-    if (finDeCarreraActivado())
-      return;
-
+    if (finDeCarreraActivado()) return;
     tiempoEntrePulsos = calcularTiempoEntrePulsos(rpm);
     ultimoPulso = micros();
-
     modoContinuo = true;
     enMovimiento = true;
     pausado = false;
   }
 
-  // Inicia movimiento por cantidad de pasos definida
   void iniciarPorPasos(long pasos, float rpm, bool horario)
   {
     configurarDireccion(horario);
-
-    if (finDeCarreraActivado())
-      return;
-
+    if (finDeCarreraActivado()) return;
     pasosTotales = abs(pasos);
     pasosRealizados = 0;
-
     tiempoEntrePulsos = calcularTiempoEntrePulsos(rpm);
     ultimoPulso = micros();
-
     modoContinuo = false;
     enMovimiento = true;
     pausado = false;
   }
 
-  // Detiene completamente el motor
   void detener()
   {
     enMovimiento = false;
@@ -145,55 +97,33 @@ public:
     digitalWrite(PUL, LOW);
   }
 
-  // Pausa el movimiento sin perder estado
   void pausar()
   {
-    if (enMovimiento)
-    {
-      pausado = true;
-      digitalWrite(PUL, LOW);
-    }
+    if (enMovimiento) { pausado = true; digitalWrite(PUL, LOW); }
   }
 
-  // Reanuda el movimiento desde donde se pausó
   void reanudar()
   {
-    if (pausado)
-    {
-      pausado = false;
-      ultimoPulso = micros();
-    }
+    if (pausado) { pausado = false; ultimoPulso = micros(); }
   }
 
-  // Función que debe llamarse constantemente (loop)
-  // Genera los pulsos sin bloquear el programa
   void actualizar()
   {
-    if (!enMovimiento || pausado)
-      return;
-
-    if (finDeCarreraActivado())
-    {
-      detener();
-      return;
-    }
+    if (!enMovimiento || pausado) return;
+    if (finDeCarreraActivado()) { detener(); return; }
 
     unsigned long ahora = micros();
-
     if (ahora - ultimoPulso >= tiempoEntrePulsos)
     {
       ultimoPulso += tiempoEntrePulsos;
-
       estadoPulso = !estadoPulso;
       digitalWrite(PUL, estadoPulso);
 
-      // Solo contar pasos en flanco HIGH
       if (estadoPulso == HIGH)
       {
         pasosRealizados++;
         posicionActual += direccionActual;
 
-        // Detener si se alcanzó el objetivo
         if (!modoContinuo && pasosRealizados >= pasosTotales)
         {
           enMovimiento = false;
@@ -203,45 +133,71 @@ public:
     }
   }
 
-  // Getters
-  long getPosicion() { return posicionActual; }
-  bool estaEnMovimiento() { return enMovimiento; }
+  long getPosicion()            { return posicionActual; }
+  bool estaEnMovimiento()       { return enMovimiento; }
+  int getPulsosPorRevolucion()  { return pulsosPorRevolucion; }
+  int getReduccion()            { return reduccion; }
 };
 
 /* =========================================================
                         CLASE PRUEBA
   Hereda de Motor y añade lógica de prueba automática
-   (movimientos entre posiciones con ciclos)
+  con velocidades de entrada/salida independientes y
+  tiempos de espera opcionales al llegar a cada posición.
 ========================================================= */
 
 class Prueba : public Motor
 {
 private:
   long posicionInicio = 0;
-  long posicionFinal = 0;
+  long posicionFinal  = 0;
 
-  // Estado de la prueba
-  bool pruebaActiva = false;
-  bool yendoAFinal = true;
+  bool pruebaActiva    = false;
+  bool yendoAFinal     = true;
   bool primerMovimiento = true;
-  bool pruebaPausada = false;
+  bool pruebaPausada   = false;
 
-  // Configuración de la prueba
-  int ciclosTotales = 0;
+  int ciclosTotales    = 0;
   int ciclosCompletados = 0;
-  float velocidadPrueba = 0;
+
+  // Velocidades del motor (rpm), ya convertidas antes de llegar aquí
+  float velocidadEntrada = 0; // tramo posicionInicio → posicionFinal
+  float velocidadSalida  = 0; // tramo posicionFinal  → posicionInicio
+
+  // ✅ Tiempos de espera en ms al llegar a cada posición (0 = sin espera)
+  //    esperaEntradaMs: espera al llegar a posicionFinal  (fin del tramo de entrada)
+  //    esperaSalidaMs:  espera al llegar a posicionInicio (fin del tramo de salida)
+  unsigned long esperaEntradaMs = 0;
+  unsigned long esperaSalidaMs  = 0;
+
+  // ✅ Control de espera no bloqueante con millis()
+  bool          enEspera        = false;
+  unsigned long inicioEspera    = 0;
+  unsigned long duracionEspera  = 0;
+
+  // Tramo pendiente que se ejecutará cuando termine la espera
+  long  destinoPendiente    = 0;
+  float velocidadPendiente  = 0;
 
 public:
-  // Constructor: reutiliza el constructor de Motor
   Prueba(int pul, int dir, int ena, int micro, int red)
       : Motor(pul, dir, ena, micro, red) {}
 
-  // Setters de posiciones
   void setPosicionInicio(long pos) { posicionInicio = pos; }
-  void setPosicionFinal(long pos) { posicionFinal = pos; }
+  void setPosicionFinal(long pos)  { posicionFinal  = pos; }
 
-  // Configura e inicia la prueba
-  void setPrueba(float velocidad, int ciclos)
+  float ciclosPorMinAVelocidadMotor(float ciclosPorMin)
+  {
+    long distanciaBase = abs(posicionFinal - posicionInicio);
+    if (distanciaBase == 0) return 0;
+    float pasosPorMin = ciclosPorMin * 2.0 * (float)distanciaBase;
+    float pasosPorSeg = pasosPorMin / 60.0;
+    return (pasosPorSeg * 60.0) / (getPulsosPorRevolucion() * getReduccion());
+  }
+
+  // ✅ Recibe también los tiempos de espera en segundos (0 = sin espera)
+  void setPrueba(float velEntrada, float velSalida, int ciclos,
+                 float esperaEntradaSeg, float esperaSalidaSeg)
   {
     if (posicionInicio == posicionFinal)
     {
@@ -249,209 +205,261 @@ public:
       return;
     }
 
-    velocidadPrueba = velocidad;
-    ciclosTotales = ciclos;
+    velocidadEntrada  = velEntrada;
+    velocidadSalida   = velSalida;
+    ciclosTotales     = ciclos;
     ciclosCompletados = 0;
-    pruebaActiva = true;
-    primerMovimiento = true;
-    pruebaPausada = false;
+    pruebaActiva      = true;
+    primerMovimiento  = true;
+    pruebaPausada     = false;
+    enEspera          = false;
+
+    // Convertir segundos → milisegundos
+    esperaEntradaMs = (unsigned long)(esperaEntradaSeg * 1000.0);
+    esperaSalidaMs  = (unsigned long)(esperaSalidaSeg  * 1000.0);
 
     enviarConfiguracionPrueba();
 
-    // Decide a qué punto ir primero
     long posicionActual = getPosicion();
     long destino;
+    float velocidadPrimerMovimiento;
 
-    if (abs(posicionActual - posicionInicio) <
-        abs(posicionActual - posicionFinal))
+    if (posicionActual == posicionFinal)
     {
-      destino = posicionFinal;
-      yendoAFinal = true;
+      // Semiciclo de posicionamiento: va a inicio a velocidad máxima
+      destino = posicionInicio;
+      yendoAFinal = false;
+      velocidadPrimerMovimiento = max(velocidadEntrada, velocidadSalida);
     }
     else
     {
-      destino = posicionInicio;
-      yendoAFinal = false;
+      // Ya está en posicionInicio: primer tramo de entrada del ciclo 1
+      destino = posicionFinal;
+      yendoAFinal = true;
+      velocidadPrimerMovimiento = velocidadEntrada;
     }
 
     long distancia = destino - posicionActual;
-    bool horario = (distancia >= 0);
-
-    iniciarPorPasos(abs(distancia), velocidadPrueba, horario);
+    iniciarPorPasos(abs(distancia), velocidadPrimerMovimiento, distancia >= 0);
   }
 
-  // Pausa/Reanuda la prueba
   void togglePause()
   {
-    if (!pruebaActiva)
-      return;
-
+    if (!pruebaActiva) return;
     pruebaPausada = !pruebaPausada;
 
     if (pruebaPausada)
     {
+      if (enEspera)
+      {
+        // Guardar tiempo restante de espera
+        unsigned long transcurrido = millis() - inicioEspera;
+        duracionEspera = (transcurrido < duracionEspera)
+                          ? duracionEspera - transcurrido
+                          : 0;
+      }
       pausar();
       Serial.println("Prueba pausada");
     }
     else
     {
+      if (enEspera)
+      {
+        // Reanudar cuenta desde el tiempo restante
+        inicioEspera = millis();
+      }
       reanudar();
       Serial.println("Prueba reanudada");
     }
   }
 
-  // Termina la prueba manualmente
   void terminarPrueba()
   {
-    if (!pruebaActiva)
-      return;
-
-    pruebaActiva = false;
+    if (!pruebaActiva) return;
+    pruebaActiva  = false;
     pruebaPausada = false;
-
+    enEspera      = false;
     detener();
-
     Serial.println("Prueba terminada manualmente");
   }
 
-  // Envía eventos por Serial (JSON)
   void enviarCicloCompletado()
   {
     StaticJsonDocument<64> doc;
-    doc["motor"] = 3;
+    doc["motor"]  = 3;
     doc["estado"] = "cycle";
     doc["ciclos"] = ciclosCompletados;
-
     serializeJson(doc, Serial);
-    Serial.println(); // necesario para ReadlineParser
+    Serial.println();
   }
 
   void enviarPruebaFinalizada()
   {
     StaticJsonDocument<64> doc;
-    doc["motor"] = 3;
+    doc["motor"]  = 3;
     doc["estado"] = "finished";
-
     serializeJson(doc, Serial);
     Serial.println();
   }
 
-  // Envío genérico de posición
   void enviarPosicion(const char *tipo, long valor)
   {
     StaticJsonDocument<96> doc;
-    doc["motor"] = 3;
+    doc["motor"]  = 3;
     doc["estado"] = "position";
-    doc["tipo"] = tipo;
-    doc["valor"] = valor;
-
+    doc["tipo"]   = tipo;
+    doc["valor"]  = valor;
     serializeJson(doc, Serial);
     Serial.println();
   }
 
-  // Envía configuración inicial de la prueba
-  // ✅ StaticJsonDocument aumentado a 256 para que el double no se trunque
   void enviarConfiguracionPrueba()
   {
-    StaticJsonDocument<256> doc; // ← Era 128
-
-    doc["motor"] = 3;
-    doc["estado"] = "config";
-    doc["ciclos"] = ciclosTotales;
+    StaticJsonDocument<256> doc;
+    doc["motor"]         = 3;
+    doc["estado"]        = "config";
+    doc["ciclos"]        = ciclosTotales;
     doc["tiempoEstimado"] = calcularTiempoEstimado();
-
     serializeJson(doc, Serial);
     Serial.println();
   }
 
-  // Calcula tiempo estimado de la prueba en segundos
-  // ✅ Cast ANTES de dividir para no perder precisión en uint64_t
+  // ✅ Tiempo estimado incluye las esperas por ciclo
   double calcularTiempoEstimado()
   {
     long distanciaBase = abs(posicionFinal - posicionInicio);
-    if (distanciaBase == 0 || velocidadPrueba == 0)
+    if (distanciaBase == 0 || velocidadEntrada == 0 || velocidadSalida == 0)
       return 0;
 
-    uint64_t tPulso = calcularTiempoEntrePulsos(velocidadPrueba);
+    uint64_t tPulsoEntrada = calcularTiempoEntrePulsos(velocidadEntrada);
+    uint64_t tPulsoSalida  = calcularTiempoEntrePulsos(velocidadSalida);
 
-    uint64_t tiempoPorPaso = tPulso * 2ULL;
+    uint64_t tiempoPorPasoEntrada = tPulsoEntrada * 2ULL;
+    uint64_t tiempoPorPasoSalida  = tPulsoSalida  * 2ULL;
 
-    long posicionActual = getPosicion();
-    long distanciaInicial = abs(posicionActual - posicionInicio);
+    // Semiciclo de posicionamiento inicial (solo si arranca desde posicionFinal)
+    uint64_t tiempoInicial = 0;
+    if (getPosicion() == posicionFinal)
+    {
+      float vMax = max(velocidadEntrada, velocidadSalida);
+      uint64_t tPulsoMax = calcularTiempoEntrePulsos(vMax);
+      tiempoInicial = (uint64_t)distanciaBase * (tPulsoMax * 2ULL);
+    }
 
-    uint64_t tiempoInicial =
-        (uint64_t)distanciaInicial * tiempoPorPaso;
+    // Tiempo de movimiento por ciclo
+    uint64_t tiempoTramoEntrada = (uint64_t)distanciaBase * tiempoPorPasoEntrada;
+    uint64_t tiempoTramoSalida  = (uint64_t)distanciaBase * tiempoPorPasoSalida;
+
+    // ✅ Esperas en microsegundos
+    uint64_t esperaEntradaUs = (uint64_t)esperaEntradaMs * 1000ULL;
+    uint64_t esperaSalidaUs  = (uint64_t)esperaSalidaMs  * 1000ULL;
 
     uint64_t tiempoPorCiclo =
-        (uint64_t)(2LL * distanciaBase) * tiempoPorPaso;
+        tiempoTramoEntrada + esperaEntradaUs +
+        tiempoTramoSalida  + esperaSalidaUs;
 
     uint64_t tiempoTotal =
-        tiempoInicial +
-        ((uint64_t)ciclosTotales * tiempoPorCiclo);
+        tiempoInicial + ((uint64_t)ciclosTotales * tiempoPorCiclo);
 
-    // ✅ Cast a double ANTES de dividir (antes era: (float)(tiempoTotal / 1000000.0)
-    //    que hacía la división en enteros y perdía decimales en valores grandes)
     return (double)tiempoTotal / 1000000.0;
   }
 
-  // Lógica principal de la prueba
+  // ✅ Lógica principal: gestiona esperas no bloqueantes y transiciones de tramo
   void ejecutarPrueba()
   {
-    if (pruebaPausada)
-      return;
+    if (pruebaPausada) return;
 
-    if (pruebaActiva && !estaEnMovimiento())
+    // Verificar si la espera activa terminó
+    if (enEspera)
     {
-      long posicionActual = getPosicion();
-      long destino;
-      // Primer movimiento (decisión inicial)
-      if (primerMovimiento)
+      if (millis() - inicioEspera >= duracionEspera)
       {
-        primerMovimiento = false;
+        // Espera terminada: arrancar el tramo pendiente
+        enEspera = false;
+        long distancia = destinoPendiente - getPosicion();
+        iniciarPorPasos(abs(distancia), velocidadPendiente, distancia >= 0);
+      }
+      return; // Sigue esperando (o acaba de arrancar el movimiento)
+    }
 
-        if (yendoAFinal)
-        {
-          destino = posicionInicio;
-          yendoAFinal = false;
-        }
-        else
-        {
-          destino = posicionFinal;
-          yendoAFinal = true;
-        }
+    if (!pruebaActiva || estaEnMovimiento()) return;
+
+    // Motor parado y sin espera activa: decidir el siguiente tramo
+    long posicionActual = getPosicion();
+    long destino;
+    float velocidadTramo;
+    unsigned long esperaAntes = 0;
+
+    if (primerMovimiento)
+    {
+      primerMovimiento = false;
+
+      if (yendoAFinal)
+      {
+        // Llegamos a posicionFinal (primer tramo de entrada completado)
+        // ✅ Aplica espera de entrada antes del tramo de salida
+        esperaAntes   = esperaEntradaMs;
+        destino       = posicionInicio;
+        yendoAFinal   = false;
+        velocidadTramo = velocidadSalida;
       }
       else
       {
-        if (yendoAFinal)
-        {
-          destino = posicionInicio;
-          yendoAFinal = false;
-        }
-        else
-        {
-          ciclosCompletados++;
-
-          enviarCicloCompletado();
-
-          // Fin de la prueba
-          if (ciclosCompletados >= ciclosTotales)
-          {
-            pruebaActiva = false;
-            detener();
-            enviarPruebaFinalizada();
-            return;
-          }
-
-          destino = posicionFinal;
-          yendoAFinal = true;
-        }
+        // Llegamos a posicionInicio desde el posicionamiento inicial
+        // No aplica espera: este movimiento no es parte de los ciclos
+        esperaAntes   = 0;
+        destino       = posicionFinal;
+        yendoAFinal   = true;
+        velocidadTramo = velocidadEntrada;
       }
-
-      long distancia = destino - posicionActual;
-      bool horario = (distancia >= 0);
-
-      iniciarPorPasos(abs(distancia), velocidadPrueba, horario);
     }
+    else
+    {
+      if (yendoAFinal)
+      {
+        // Llegamos a posicionFinal (tramo de entrada completado)
+        // ✅ Aplica espera de entrada
+        esperaAntes   = esperaEntradaMs;
+        destino       = posicionInicio;
+        yendoAFinal   = false;
+        velocidadTramo = velocidadSalida;
+      }
+      else
+      {
+        // Llegamos a posicionInicio (tramo de salida completado): ciclo completo
+        ciclosCompletados++;
+        enviarCicloCompletado();
+
+        if (ciclosCompletados >= ciclosTotales)
+        {
+          pruebaActiva = false;
+          detener();
+          enviarPruebaFinalizada();
+          return;
+        }
+
+        // ✅ Aplica espera de salida antes del siguiente tramo de entrada
+        esperaAntes   = esperaSalidaMs;
+        destino       = posicionFinal;
+        yendoAFinal   = true;
+        velocidadTramo = velocidadEntrada;
+      }
+    }
+
+    if (esperaAntes > 0)
+    {
+      // Iniciar espera no bloqueante y guardar el tramo pendiente
+      enEspera          = true;
+      inicioEspera      = millis();
+      duracionEspera    = esperaAntes;
+      destinoPendiente  = destino;
+      velocidadPendiente = velocidadTramo;
+      return;
+    }
+
+    // Sin espera: arrancar el tramo directamente
+    long distancia = destino - posicionActual;
+    iniciarPorPasos(abs(distancia), velocidadTramo, distancia >= 0);
   }
 };
 
@@ -488,7 +496,7 @@ void loop()
       return;
     }
 
-    int motor = doc["motor"];
+    int motor    = doc["motor"];
     String accion = doc["accion"];
 
     /* ================= MOTOR 1 ================= */
@@ -497,13 +505,10 @@ void loop()
       if (accion == "move")
       {
         String dir = doc["direccion"];
-        if (dir == "left")
-          motor1.iniciarContinuo(100, true);
-        else if (dir == "right")
-          motor1.iniciarContinuo(100, false);
+        if (dir == "left")  motor1.iniciarContinuo(100, true);
+        else if (dir == "right") motor1.iniciarContinuo(100, false);
       }
-      else if (accion == "stop")
-        motor1.detener();
+      else if (accion == "stop") motor1.detener();
     }
 
     /* ================= MOTOR 2 ================= */
@@ -512,13 +517,10 @@ void loop()
       if (accion == "move")
       {
         String dir = doc["direccion"];
-        if (dir == "up")
-          motor2.iniciarContinuo(100, true);
-        else if (dir == "down")
-          motor2.iniciarContinuo(100, false);
+        if (dir == "up")   motor2.iniciarContinuo(100, true);
+        else if (dir == "down") motor2.iniciarContinuo(100, false);
       }
-      else if (accion == "stop")
-        motor2.detener();
+      else if (accion == "stop") motor2.detener();
     }
 
     /* ================= MOTOR 3 (PRUEBA) ================= */
@@ -527,10 +529,8 @@ void loop()
       if (accion == "rotate")
       {
         String dir = doc["direccion"];
-        if (dir == "CW")
-          prueba1.iniciarContinuo(5, true);
-        else if (dir == "CCW")
-          prueba1.iniciarContinuo(5, false);
+        if (dir == "CW")  prueba1.iniciarContinuo(3, true);
+        else if (dir == "CCW") prueba1.iniciarContinuo(3, false);
       }
       else if (accion == "pause")
       {
@@ -538,10 +538,31 @@ void loop()
       }
       else if (accion == "startTest")
       {
-        float velocidadLineal = doc["velocidad"];
-        float velocidad = velocidadLineal * 0.15;
-        int ciclos = doc["ciclos"];
-        prueba1.setPrueba(velocidad, ciclos);
+        float velEntradaInput  = doc["velocidadEntrada"];
+        float velSalidaInput   = doc["velocidadSalida"];
+        int   ciclos           = doc["ciclos"];
+        String unidad          = doc["unidad"] | String("mm/s");
+
+        // ✅ 0.0 si el campo no viene (campo vacío = sin espera)
+        float esperaEntradaSeg = doc["esperaEntrada"] | 0.0f;
+        float esperaSalidaSeg  = doc["esperaSalida"]  | 0.0f;
+
+        float velocidadEntradaMotor;
+        float velocidadSalidaMotor;
+
+        if (unidad == "ciclos/min")
+        {
+          velocidadEntradaMotor = prueba1.ciclosPorMinAVelocidadMotor(velEntradaInput);
+          velocidadSalidaMotor  = prueba1.ciclosPorMinAVelocidadMotor(velSalidaInput);
+        }
+        else
+        {
+          velocidadEntradaMotor = velEntradaInput * 0.15;
+          velocidadSalidaMotor  = velSalidaInput  * 0.15;
+        }
+
+        prueba1.setPrueba(velocidadEntradaMotor, velocidadSalidaMotor,
+                          ciclos, esperaEntradaSeg, esperaSalidaSeg);
       }
       else if (accion == "saveStart")
       {
@@ -559,7 +580,6 @@ void loop()
       {
         prueba1.setPosicionInicio(0);
         prueba1.setPosicionFinal(0);
-
         prueba1.enviarPosicion("start", 0);
         prueba1.enviarPosicion("end", 0);
       }
