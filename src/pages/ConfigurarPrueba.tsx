@@ -14,6 +14,12 @@ import FondoIntertekOscuro from "../assets/FondoIntertekOscuro.jpg";
 import { FaArrowRotateLeft, FaArrowRotateRight } from "react-icons/fa6";
 import { RiDeleteBin5Fill } from "react-icons/ri";
 
+type UnidadVelocidad = "mm/s" | "ciclos/min";
+
+type CampoVelocidad = "velocidadEntrada" | "velocidadSalida";
+// ✅ Se agregan los dos nuevos campos de tiempo de espera
+type CampoInput = "ciclos" | CampoVelocidad | "esperaEntrada" | "esperaSalida";
+
 function ConfigurarPrueba() {
   const { theme } = useContext(ThemeContext);
 
@@ -25,7 +31,10 @@ function ConfigurarPrueba() {
   const activePointerId = useRef<number | null>(null);
 
   const ciclosRef = useRef<HTMLInputElement>(null);
-  const velocidadRef = useRef<HTMLInputElement>(null);
+  const velocidadEntradaRef = useRef<HTMLInputElement>(null);
+  const velocidadSalidaRef = useRef<HTMLInputElement>(null);
+  const esperaEntradaRef = useRef<HTMLInputElement>(null);
+  const esperaSalidaRef = useRef<HTMLInputElement>(null);
   const keyboardRef = useRef<HTMLDivElement>(null);
 
   const rotateCommandMap: Record<string, string> = {
@@ -72,9 +81,6 @@ function ConfigurarPrueba() {
     }
   };
 
-  //const handleRotatePointerCancel = stopRotateMotor;
-  //const handleRotatePointerLeave = stopRotateMotor;
-
   useEffect(() => {
     const handleGlobalPointerUp = () => {
       if (activeButton) stopRotateMotor();
@@ -110,19 +116,27 @@ function ConfigurarPrueba() {
     guardarPosicionFinal: false,
   });
 
+  // ✅ Se agregan esperaEntrada y esperaSalida (vacío = sin espera)
   const [inputs, setInputs] = useState({
     ciclos: "",
-    velocidad: "",
+    velocidadEntrada: "",
+    velocidadSalida: "",
+    esperaEntrada: "",
+    esperaSalida: "",
   });
 
   const [inputErrors, setInputErrors] = useState({
     ciclos: "",
-    velocidad: "",
+    velocidadEntrada: "",
+    velocidadSalida: "",
+    esperaEntrada: "",
+    esperaSalida: "",
   });
 
-  const [activeInput, setActiveInput] = useState<"ciclos" | "velocidad" | null>(
-    null,
-  );
+  const [activeInput, setActiveInput] = useState<CampoInput | null>(null);
+
+  // null = no se ha seleccionado unidad todavía
+  const [unidad, setUnidad] = useState<UnidadVelocidad | null>(null);
 
   const posicionesIguales =
     buttons.guardarPosicionInicial &&
@@ -164,7 +178,19 @@ function ConfigurarPrueba() {
      VALIDACIÓN INPUTS
   ================================== */
 
-  const validarInput = (name: "ciclos" | "velocidad", value: string) => {
+  const limitesVelocidad: Record<
+    UnidadVelocidad,
+    { min: number; max: number }
+  > = {
+    "mm/s": { min: 0.01, max: 50 },
+    "ciclos/min": { min: 1, max: 30 },
+  };
+
+  const validarInput = (
+    name: CampoInput,
+    value: string,
+    unidadActual: UnidadVelocidad | null = unidad,
+  ) => {
     if (value === "") {
       setInputErrors((prev) => ({ ...prev, [name]: "" }));
       return;
@@ -181,26 +207,62 @@ function ConfigurarPrueba() {
       } else {
         setInputErrors((prev) => ({ ...prev, ciclos: "" }));
       }
+      return;
     }
 
-    if (name === "velocidad") {
+    if (name === "velocidadEntrada" || name === "velocidadSalida") {
       if (value === "." || value.endsWith(".")) {
         setInputErrors((prev) => ({
           ...prev,
-          velocidad: "Ingresa un valor decimal válido",
+          [name]: "Ingresa un valor decimal válido",
         }));
         return;
       }
 
-      if (num < 0.01 || num > 50) {
+      if (!unidadActual) {
+        setInputErrors((prev) => ({ ...prev, [name]: "" }));
+        return;
+      }
+
+      const { min, max } = limitesVelocidad[unidadActual];
+
+      if (num < min || num > max) {
         setInputErrors((prev) => ({
           ...prev,
-          velocidad: "La velocidad debe estar entre 0.01 y 50",
+          [name]: `La velocidad debe estar entre ${min} y ${max} ${unidadActual}`,
         }));
       } else {
-        setInputErrors((prev) => ({ ...prev, velocidad: "" }));
+        setInputErrors((prev) => ({ ...prev, [name]: "" }));
+      }
+      return;
+    }
+
+    // ✅ Validación de tiempos de espera: deben ser números positivos
+    if (name === "esperaEntrada" || name === "esperaSalida") {
+      if (value === "." || value.endsWith(".")) {
+        setInputErrors((prev) => ({
+          ...prev,
+          [name]: "Ingresa un valor decimal válido",
+        }));
+        return;
+      }
+
+      if (num <= 0) {
+        setInputErrors((prev) => ({
+          ...prev,
+          [name]: "El tiempo de espera debe ser mayor a 0",
+        }));
+      } else {
+        setInputErrors((prev) => ({ ...prev, [name]: "" }));
       }
     }
+  };
+
+  const handleUnidadChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nuevaUnidad = e.target.value as UnidadVelocidad;
+    setUnidad(nuevaUnidad);
+    validarInput("velocidadEntrada", inputs.velocidadEntrada, nuevaUnidad);
+    validarInput("velocidadSalida", inputs.velocidadSalida, nuevaUnidad);
   };
 
   /* ================================
@@ -208,22 +270,18 @@ function ConfigurarPrueba() {
   ================================== */
 
   const sanitizeValue = (value: string, decimals?: number) => {
-    // Si NO se permiten decimales
     if (decimals === undefined) {
       return value.replace(/\D/g, "");
     }
 
-    // Solo números y punto
     value = value.replace(/[^0-9.]/g, "");
 
-    // Evitar múltiples puntos
     const parts = value.split(".");
 
     if (parts.length > 2) {
       value = parts[0] + "." + parts.slice(1).join("");
     }
 
-    // Limitar cantidad de decimales
     if (value.includes(".")) {
       const [integer, decimal] = value.split(".");
       value = `${integer}.${decimal.slice(0, decimals)}`;
@@ -235,13 +293,16 @@ function ConfigurarPrueba() {
   const handleKeyPress = (key: string) => {
     if (!activeInput) return;
 
-    const decimalConfig: Record<string, number | undefined> = {
+    // ✅ esperaEntrada y esperaSalida admiten 1 decimal (segundos con décimas)
+    const decimalConfig: Record<CampoInput, number | undefined> = {
       ciclos: undefined,
-      velocidad: 1,
+      velocidadEntrada: 1,
+      velocidadSalida: 1,
+      esperaEntrada: 1,
+      esperaSalida: 1,
     };
 
     const rawValue = inputs[activeInput] + key;
-
     const newValue = sanitizeValue(rawValue, decimalConfig[activeInput]);
 
     setInputs((prev) => ({
@@ -298,7 +359,6 @@ function ConfigurarPrueba() {
       const target = e.target as Node;
 
       const isClickInsideKeyboard = keyboardRef.current?.contains(target);
-
       const isInput = target instanceof HTMLInputElement;
 
       if (!isClickInsideKeyboard && !isInput) {
@@ -325,10 +385,15 @@ function ConfigurarPrueba() {
     buttons.guardarPosicionInicial &&
     buttons.guardarPosicionFinal &&
     inputs.ciclos !== "" &&
-    inputs.velocidad !== "" &&
+    inputs.velocidadEntrada !== "" &&
+    inputs.velocidadSalida !== "" &&
+    unidad !== null &&
     !posicionesIguales &&
     !inputErrors.ciclos &&
-    !inputErrors.velocidad;
+    !inputErrors.velocidadEntrada &&
+    !inputErrors.velocidadSalida &&
+    !inputErrors.esperaEntrada && // ✅ si hay valor debe ser válido
+    !inputErrors.esperaSalida;
 
   const handleIniciarPrueba = () => {
     if (!isReady) return;
@@ -336,8 +401,15 @@ function ConfigurarPrueba() {
     sendJSON({
       motor: 3,
       accion: "startTest",
-      velocidad: Number(inputs.velocidad),
+      velocidadEntrada: Number(inputs.velocidadEntrada),
+      velocidadSalida: Number(inputs.velocidadSalida),
+      unidad: unidad,
       ciclos: Number(inputs.ciclos),
+      // ✅ Si el campo está vacío se envía 0 (la ESP interpreta 0 como sin espera)
+      esperaEntrada:
+        inputs.esperaEntrada !== "" ? Number(inputs.esperaEntrada) : 0,
+      esperaSalida:
+        inputs.esperaSalida !== "" ? Number(inputs.esperaSalida) : 0,
     });
   };
 
@@ -357,11 +429,11 @@ function ConfigurarPrueba() {
 
         <div className="absolute inset-0 bg-black/50" />
 
-        <div className="relative z-10 w-full flex flex-col items-center gap-10">
+        <div className="relative z-10 w-full flex flex-col items-center gap-5">
           <Card title="Control de Posición">
             {/* ROTACIÓN */}
             <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-60">
+              <div className="flex items-center gap-22">
                 <ActionButton
                   name="rotarManivelaAntihorario"
                   disabled={
@@ -372,10 +444,12 @@ function ConfigurarPrueba() {
                   }
                   onPointerDown={handleRotatePointerDown}
                   onPointerUp={handleRotatePointerUp}
-                  //onPointerCancel={handleRotatePointerCancel}
-                  //onPointerLeave={handleRotatePointerLeave}
                 >
                   <FaArrowRotateLeft size={28} />
+                </ActionButton>
+
+                <ActionButton name="borrarPosicion" onClick={handleButtons}>
+                  <RiDeleteBin5Fill size={28} />
                 </ActionButton>
 
                 <ActionButton
@@ -388,28 +462,27 @@ function ConfigurarPrueba() {
                   }
                   onPointerDown={handleRotatePointerDown}
                   onPointerUp={handleRotatePointerUp}
-                  //onPointerCancel={handleRotatePointerCancel}
-                  //onPointerLeave={handleRotatePointerLeave}
                 >
                   <FaArrowRotateRight size={28} />
                 </ActionButton>
               </div>
 
-              <div className="flex items-center gap-50">
+              <div className="flex items-center gap-10">
                 <Output>Giro antihorario</Output>
+                <Output>Borrar posiciones</Output>
                 <Output>Giro horario</Output>
               </div>
             </div>
 
             {/* BOTONES */}
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-25">
               <ActionButton
                 name="guardarPosicionInicial"
                 outline={false}
                 disabled={buttons.guardarPosicionInicial}
                 onClick={handleButtons}
               >
-                Guardar Posición de Inicio
+                Guardar Posición Inicial
               </ActionButton>
 
               <ActionButton
@@ -427,16 +500,71 @@ function ConfigurarPrueba() {
                 La posición de inicio y final no pueden ser iguales
               </p>
             )}
-
-            <ActionButton name="borrarPosicion" onClick={handleButtons}>
-              <RiDeleteBin5Fill size={28} />
-              Borrar Posición
-            </ActionButton>
           </Card>
 
           <Card title="Parámetros de Prueba">
             <div className="flex items-center gap-20">
               <div className="flex gap-6">
+                <Input
+                  name="velocidadEntrada"
+                  placeholder="Velocidad de entrada"
+                  value={inputs.velocidadEntrada}
+                  decimals={1}
+                  onFocus={() => setActiveInput("velocidadEntrada")}
+                  readOnly
+                  error={inputErrors.velocidadEntrada}
+                  ref={velocidadEntradaRef}
+                />
+
+                <Input
+                  name="velocidadSalida"
+                  placeholder="Velocidad de salida"
+                  value={inputs.velocidadSalida}
+                  decimals={1}
+                  onFocus={() => setActiveInput("velocidadSalida")}
+                  readOnly
+                  error={inputErrors.velocidadSalida}
+                  ref={velocidadSalidaRef}
+                />
+
+                <select
+                  value={unidad ?? ""}
+                  onChange={handleUnidadChange}
+                  className="select select-ghost w-30"
+                >
+                  <option value="" disabled>
+                    Seleccionar Unidad
+                  </option>
+                  <option value="mm/s">mm/s</option>
+                  <option value="ciclos/min">ciclos/min</option>
+                </select>
+              </div>
+            </div>
+
+            {/* ✅ Tiempos de espera opcionales */}
+            <div className="flex items-center gap-20">
+              <div className="flex gap-6">
+                <Input
+                  name="esperaEntrada"
+                  placeholder="Espera entrada (s)"
+                  value={inputs.esperaEntrada}
+                  decimals={1}
+                  onFocus={() => setActiveInput("esperaEntrada")}
+                  readOnly
+                  error={inputErrors.esperaEntrada}
+                  ref={esperaEntradaRef}
+                />
+
+                <Input
+                  name="esperaSalida"
+                  placeholder="Espera salida (s)"
+                  value={inputs.esperaSalida}
+                  decimals={1}
+                  onFocus={() => setActiveInput("esperaSalida")}
+                  readOnly
+                  error={inputErrors.esperaSalida}
+                  ref={esperaSalidaRef}
+                />
                 <Input
                   name="ciclos"
                   placeholder="Número de Ciclos"
@@ -447,18 +575,11 @@ function ConfigurarPrueba() {
                   error={inputErrors.ciclos}
                   ref={ciclosRef}
                 />
-
-                <Input
-                  name="velocidad"
-                  placeholder="Velocidad (mm/s)"
-                  value={inputs.velocidad}
-                  decimals={1}
-                  onFocus={() => setActiveInput("velocidad")}
-                  readOnly
-                  error={inputErrors.velocidad}
-                  ref={velocidadRef}
-                />
               </div>
+            </div>
+
+            <div className="flex items-center">
+              <div className="flex gap-6"></div>
 
               <NavigateSendButton
                 name="iniciarPrueba"
