@@ -60,7 +60,7 @@ ipcMain.on("shutdown-system", () => {
 // Cliente Socket.IO
 // ===============================
 
-const SERVIDOR_URL = "http://192.168.120.56:5000";
+const SERVIDOR_URL = "http://192.168.0.101:5000";
 
 let socket = null;
 

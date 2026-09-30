@@ -57,7 +57,7 @@ void setup()
 void loop()
 {
   uint16_t distancia1 = sensor1.readRangeContinuousMillimeters();
-  uint16_t distancia2 = sensor2.readRangeContinuousMillimeters()*10;
+  uint16_t distancia2 = sensor2.readRangeContinuousMillimeters();
 
   Serial.print("Sensor 1: ");
   Serial.print(distancia1);
