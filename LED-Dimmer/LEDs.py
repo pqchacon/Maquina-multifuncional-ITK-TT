@@ -1,18 +1,21 @@
+import signal
+import sys
 from gpiozero import PWMLED
-from time import sleep
 
-# Configuración del LED en el pin GPIO 18 (ajusta según tu conexión)
-led = PWMLED(18)
 
-# Subir el brillo de 0 a 1 (0% a 100%)
-for i in range(101):
-    led.value = i / 100
-    sleep(0.01)
+led = PWMLED(18, frequency=1000)  # 1 kHz para evitar parpadeo
 
-# Bajar el brillo de 1 a 0
-for i in range(100, -1, -1):
-    led.value = i / 100
-    sleep(0.01)
 
-# Apagar el LED
-led.off()
+def detener(signum, frame):
+    # systemd envía SIGTERM al detener el servicio o al apagar la Raspberry
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, detener)
+
+try:
+    # Fade infinito: 1 s subiendo, 1 s bajando (n=None = sin fin)
+    led.pulse(fade_in_time=1, fade_out_time=1, n=None, background=False)
+finally:
+    led.off()
+    led.close()
