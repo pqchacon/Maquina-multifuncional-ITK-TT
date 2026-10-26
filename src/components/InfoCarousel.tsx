@@ -6,6 +6,8 @@
 //   - description: texto descriptivo
 // ================================================
 
+import { useEffect, useRef } from "react";
+
 // Importa tus imágenes aquí, por ejemplo:
 import MaquinaMultifuncional from "../assets/Maquina-multifuncional.png";
 import MecanismosMoviles from "../assets/Mecanismos-moviles.png";
@@ -87,8 +89,104 @@ const slides = [
 ];
 
 function InfoCarousel() {
+  // Arrastre con dedo o mouse. En la Raspberry Pi la pantalla táctil suele
+  // llegar como mouse, por eso se maneja con Pointer Events en lugar de
+  // depender del scroll táctil nativo.
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({
+    active: false,
+    startX: 0,
+    startScroll: 0,
+    moved: false,
+  });
+  const UMBRAL_SWIPE = 50; // px mínimos para cambiar de diapositiva
+
+  const animRef = useRef<number | null>(null);
+
+  const cancelarAnimacion = () => {
+    if (animRef.current !== null) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+  };
+
+  // Animación propia: termina siempre exactamente en el borde del slide,
+  // sin depender de cuánto tarde el scroll "smooth" del navegador.
+  const animarHasta = (el: HTMLDivElement, destino: number) => {
+    cancelarAnimacion();
+    const inicio = el.scrollLeft;
+    const distancia = destino - inicio;
+    const DURACION = 300; // ms
+    const t0 = performance.now();
+
+    const paso = (ahora: number) => {
+      const t = Math.min(1, (ahora - t0) / DURACION);
+      const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      el.scrollLeft = inicio + distancia * ease;
+      if (t < 1) {
+        animRef.current = requestAnimationFrame(paso);
+      } else {
+        el.scrollLeft = destino; // posición exacta
+        animRef.current = null;
+        el.style.scrollSnapType = ""; // restaura el snap ya alineado
+      }
+    };
+    animRef.current = requestAnimationFrame(paso);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    cancelarAnimacion(); // si tocan durante una animación, se toma el control
+    el.style.scrollSnapType = "none";
+    el.style.scrollBehavior = "auto";
+    drag.current = {
+      active: true,
+      startX: e.clientX,
+      startScroll: el.scrollLeft,
+      moved: false,
+    };
+    el.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = carouselRef.current;
+    if (!el || !drag.current.active) return;
+    const dx = e.clientX - drag.current.startX;
+    if (Math.abs(dx) > 5) drag.current.moved = true;
+    el.scrollLeft = drag.current.startScroll - dx;
+  };
+
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = carouselRef.current;
+    if (!el || !drag.current.active) return;
+    drag.current.active = false;
+    if (el.hasPointerCapture(e.pointerId))
+      el.releasePointerCapture(e.pointerId);
+
+    const width = el.clientWidth;
+    const startIndex = Math.round(drag.current.startScroll / width);
+    const dx = e.clientX - drag.current.startX;
+    let target = startIndex;
+    if (dx <= -UMBRAL_SWIPE) target = startIndex + 1;
+    else if (dx >= UMBRAL_SWIPE) target = startIndex - 1;
+    target = Math.max(0, Math.min(slides.length - 1, target));
+
+    animarHasta(el, target * width);
+  };
+
+  useEffect(() => cancelarAnimacion, []);
+
   return (
-    <div className="carousel rounded-box w-full">
+    <div
+      ref={carouselRef}
+      className="carousel rounded-box w-full select-none cursor-grab active:cursor-grabbing touch-pan-y"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onDragStart={(e) => e.preventDefault()}
+    >
       {slides.map((slide, index) => (
         <div
           key={index}
@@ -98,7 +196,8 @@ function InfoCarousel() {
           <img
             src={slide.image}
             alt={slide.title}
-            className="w-full max-h-[55vh] object-contain rounded-xl"
+            draggable={false}
+            className="w-full max-h-[55vh] object-contain rounded-xl pointer-events-none"
           />
 
           {/* TEXTO */}
