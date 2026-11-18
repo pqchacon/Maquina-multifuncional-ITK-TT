@@ -15,7 +15,7 @@ signal.signal(signal.SIGTERM, detener)
 
 try:
     # Fade infinito: 1 s subiendo, 1 s bajando (n=None = sin fin)
-    led.pulse(fade_in_time=1, fade_out_time=1, n=None, background=False)
+    led.pulse(fade_in_time=2, fade_out_time=2, n=None, background=False)
 finally:
     led.off()
     led.close()

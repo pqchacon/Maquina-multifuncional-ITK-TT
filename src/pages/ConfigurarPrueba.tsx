@@ -17,7 +17,6 @@ import { RiDeleteBin5Fill } from "react-icons/ri";
 type UnidadVelocidad = "mm/s" | "ciclos/min";
 
 type CampoVelocidad = "velocidadEntrada" | "velocidadSalida";
-// ✅ Se agregan los dos nuevos campos de tiempo de espera
 type CampoInput = "ciclos" | CampoVelocidad | "esperaEntrada" | "esperaSalida";
 
 function ConfigurarPrueba() {
@@ -116,7 +115,6 @@ function ConfigurarPrueba() {
     guardarPosicionFinal: false,
   });
 
-  // ✅ Se agregan esperaEntrada y esperaSalida (vacío = sin espera)
   const [inputs, setInputs] = useState({
     ciclos: "",
     velocidadEntrada: "",
@@ -293,7 +291,6 @@ function ConfigurarPrueba() {
   const handleKeyPress = (key: string) => {
     if (!activeInput) return;
 
-    // ✅ esperaEntrada y esperaSalida admiten 1 decimal (segundos con décimas)
     const decimalConfig: Record<CampoInput, number | undefined> = {
       ciclos: undefined,
       velocidadEntrada: 1,
@@ -381,6 +378,48 @@ function ConfigurarPrueba() {
      INICIAR PRUEBA
   ================================== */
 
+  // En ciclos/min las esperas forman parte del ciclo: cada espera se descuenta
+  // del medio ciclo (30 / ciclos/min) de su tramo, y debe quedar tiempo para moverse
+  // sin pasar de las rpm máximas del motor (mismos valores que el firmware).
+  const PULSOS_POR_REV = 800;
+  const REDUCCION = 20;
+  const RPM_MOTOR_MAX = 1000; // rpm del motor, sin reducción
+  const PASOS_POR_REV = PULSOS_POR_REV * REDUCCION;
+  const RPM_SALIDA_MAX = RPM_MOTOR_MAX / REDUCCION; // 50 rpm de salida
+
+  const errorEsperaEnCiclos = (espera: string, velocidad: string) => {
+    if (unidad !== "ciclos/min" || espera === "" || velocidad === "") return "";
+
+    const w = Number(espera);
+    const v = Number(velocidad);
+    if (!Number.isFinite(w) || !Number.isFinite(v) || v <= 0) return "";
+
+    const tramo = 30 / v;
+
+    // Tiempo mínimo de movimiento para no exceder RPM_SALIDA_MAX (si ya hay posiciones)
+    let movimientoMin = 0;
+    if (positions.start !== null && positions.end !== null) {
+      const distancia = Math.abs(positions.end - positions.start);
+      movimientoMin = (distancia * 60) / (RPM_SALIDA_MAX * PASOS_POR_REV);
+    }
+
+    const limite = tramo - movimientoMin;
+    if (w >= limite) {
+      const maxima = Math.max(0, Math.floor(limite * 100) / 100);
+      return `La espera debe ser menor a ${maxima} s (medio ciclo a ${v} ciclos/min)`;
+    }
+    return "";
+  };
+
+  const errorEsperaEntradaCiclos = errorEsperaEnCiclos(
+    inputs.esperaEntrada,
+    inputs.velocidadEntrada,
+  );
+  const errorEsperaSalidaCiclos = errorEsperaEnCiclos(
+    inputs.esperaSalida,
+    inputs.velocidadSalida,
+  );
+
   const isReady =
     buttons.guardarPosicionInicial &&
     buttons.guardarPosicionFinal &&
@@ -392,8 +431,10 @@ function ConfigurarPrueba() {
     !inputErrors.ciclos &&
     !inputErrors.velocidadEntrada &&
     !inputErrors.velocidadSalida &&
-    !inputErrors.esperaEntrada && // ✅ si hay valor debe ser válido
-    !inputErrors.esperaSalida;
+    !inputErrors.esperaEntrada &&
+    !inputErrors.esperaSalida &&
+    !errorEsperaEntradaCiclos &&
+    !errorEsperaSalidaCiclos;
 
   const handleIniciarPrueba = () => {
     if (!isReady) return;
@@ -405,7 +446,6 @@ function ConfigurarPrueba() {
       velocidadSalida: Number(inputs.velocidadSalida),
       unidad: unidad,
       ciclos: Number(inputs.ciclos),
-      // ✅ Si el campo está vacío se envía 0 (la ESP interpreta 0 como sin espera)
       esperaEntrada:
         inputs.esperaEntrada !== "" ? Number(inputs.esperaEntrada) : 0,
       esperaSalida:
@@ -541,7 +581,7 @@ function ConfigurarPrueba() {
               </div>
             </div>
 
-            {/* ✅ Tiempos de espera opcionales */}
+            {/* Tiempos de espera opcionales */}
             <div className="flex items-center gap-20">
               <div className="flex gap-6">
                 <Input
@@ -551,7 +591,7 @@ function ConfigurarPrueba() {
                   decimals={1}
                   onFocus={() => setActiveInput("esperaEntrada")}
                   readOnly
-                  error={inputErrors.esperaEntrada}
+                  error={inputErrors.esperaEntrada || errorEsperaEntradaCiclos}
                   ref={esperaEntradaRef}
                 />
 
@@ -562,7 +602,7 @@ function ConfigurarPrueba() {
                   decimals={1}
                   onFocus={() => setActiveInput("esperaSalida")}
                   readOnly
-                  error={inputErrors.esperaSalida}
+                  error={inputErrors.esperaSalida || errorEsperaSalidaCiclos}
                   ref={esperaSalidaRef}
                 />
                 <Input

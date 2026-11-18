@@ -77,7 +77,7 @@ function CorrerPrueba() {
     // Registrar el listener serial
     const cleanup = window.api.onSerialData(handleSerialData);
 
-    // ✅ Avisar al main que este componente ya está montado y escuchando.
+    // Avisar al main que este componente ya está montado y escuchando.
     // El main enviará cualquier mensaje que haya llegado antes de este punto.
     window.api.rendererReady();
     console.log("[RENDERER] Listo, avisando al main");
