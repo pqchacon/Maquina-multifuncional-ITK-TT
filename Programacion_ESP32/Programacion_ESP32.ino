@@ -1,17 +1,15 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+// Velocidad máxima del motor de prueba SIN reducción (rpm de motor).
+// Si una configuración lo excede, la prueba no arranca.
+const float RPM_MOTOR_MAX = 1000.0;
+
 /* =========================================================
                         CLASE MOTOR
     Clase base que controla un motor paso a paso mediante
     señales PUL (pulso), DIR (dirección) y ENA (enable)
 ========================================================= */
-
-// Velocidad máxima del motor de prueba SIN reducción (rpm de motor).
-// Las rpm que maneja el firmware son de salida (ya con reducción), así que
-// el límite de salida es RPM_MOTOR_MAX / reducción (1000 / 20 = 50 rpm).
-// Si una configuración lo excede, la prueba no arranca.
-const float RPM_MOTOR_MAX = 1000.0;
 
 class Motor
 {
@@ -187,13 +185,10 @@ private:
   int ciclosTotales = 0;
   int ciclosCompletados = 0;
 
-  // Velocidades del motor (rpm), ya convertidas antes de llegar aquí
-  float velocidadEntrada = 0; // tramo posicionInicio → posicionFinal
-  float velocidadSalida = 0;  // tramo posicionFinal  → posicionInicio
+  float velocidadEntrada = 0;
+  float velocidadSalida = 0;
 
   // Tiempos de espera en ms al llegar a cada posición (0 = sin espera)
-  //    esperaEntradaMs: espera al llegar a posicionFinal  (fin del tramo de entrada)
-  //    esperaSalidaMs:  espera al llegar a posicionInicio (fin del tramo de salida)
   unsigned long esperaEntradaMs = 0;
   unsigned long esperaSalidaMs = 0;
 
@@ -225,6 +220,16 @@ public:
       return 0;
 
     float pasosPorSeg = (float)distanciaBase / movimientoSeg;
+    return (pasosPorSeg * 60.0) / (getPulsosPorRevolucion() * getReduccion());
+  }
+
+  float segundosAVelocidadMotor(float segundos)
+  {
+    long distanciaBase = abs(posicionFinal - posicionInicio);
+    if (distanciaBase == 0 || segundos <= 0)
+      return 0;
+
+    float pasosPorSeg = (float)distanciaBase / segundos;
     return (pasosPorSeg * 60.0) / (getPulsosPorRevolucion() * getReduccion());
   }
 
@@ -611,6 +616,20 @@ void loop()
           if (velocidadEntradaMotor <= 0 || velocidadSalidaMotor <= 0)
           {
             Serial.println("{\"motor\":3,\"estado\":\"error\",\"mensaje\":\"La espera es mayor o igual al tiempo del tramo\"}");
+            return;
+          }
+        }
+        else if (unidad == "segundos")
+        {
+          // velEntradaInput / velSalidaInput son los segundos que debe durar
+          // cada movimiento (sin contar las esperas)
+          velocidadEntradaMotor = prueba1.segundosAVelocidadMotor(velEntradaInput);
+          velocidadSalidaMotor = prueba1.segundosAVelocidadMotor(velSalidaInput);
+
+          // 0 = tiempo inválido (o posiciones inválidas): no arrancar
+          if (velocidadEntradaMotor <= 0 || velocidadSalidaMotor <= 0)
+          {
+            Serial.println("{\"motor\":3,\"estado\":\"error\",\"mensaje\":\"Tiempo de movimiento invalido\"}");
             return;
           }
         }

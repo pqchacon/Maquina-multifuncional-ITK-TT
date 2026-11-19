@@ -14,7 +14,7 @@ import FondoIntertekOscuro from "../assets/FondoIntertekOscuro.jpg";
 import { FaArrowRotateLeft, FaArrowRotateRight } from "react-icons/fa6";
 import { RiDeleteBin5Fill } from "react-icons/ri";
 
-type UnidadVelocidad = "mm/s" | "ciclos/min";
+type UnidadVelocidad = "mm/s" | "ciclos/min" | "segundos";
 
 type CampoVelocidad = "velocidadEntrada" | "velocidadSalida";
 type CampoInput = "ciclos" | CampoVelocidad | "esperaEntrada" | "esperaSalida";
@@ -133,7 +133,6 @@ function ConfigurarPrueba() {
 
   const [activeInput, setActiveInput] = useState<CampoInput | null>(null);
 
-  // null = no se ha seleccionado unidad todavía
   const [unidad, setUnidad] = useState<UnidadVelocidad | null>(null);
 
   const posicionesIguales =
@@ -182,6 +181,7 @@ function ConfigurarPrueba() {
   > = {
     "mm/s": { min: 0.01, max: 50 },
     "ciclos/min": { min: 1, max: 30 },
+    segundos: { min: 0.5, max: 60 },
   };
 
   const validarInput = (
@@ -227,7 +227,10 @@ function ConfigurarPrueba() {
       if (num < min || num > max) {
         setInputErrors((prev) => ({
           ...prev,
-          [name]: `La velocidad debe estar entre ${min} y ${max} ${unidadActual}`,
+          [name]:
+            unidadActual === "segundos"
+              ? `El tiempo debe estar entre ${min} y ${max} s`
+              : `La velocidad debe estar entre ${min} y ${max} ${unidadActual}`,
         }));
       } else {
         setInputErrors((prev) => ({ ...prev, [name]: "" }));
@@ -235,7 +238,7 @@ function ConfigurarPrueba() {
       return;
     }
 
-    // ✅ Validación de tiempos de espera: deben ser números positivos
+    // Validación de tiempos de espera: deben ser números positivos
     if (name === "esperaEntrada" || name === "esperaSalida") {
       if (value === "." || value.endsWith(".")) {
         setInputErrors((prev) => ({
@@ -378,9 +381,6 @@ function ConfigurarPrueba() {
      INICIAR PRUEBA
   ================================== */
 
-  // En ciclos/min las esperas forman parte del ciclo: cada espera se descuenta
-  // del medio ciclo (30 / ciclos/min) de su tramo, y debe quedar tiempo para moverse
-  // sin pasar de las rpm máximas del motor (mismos valores que el firmware).
   const PULSOS_POR_REV = 800;
   const REDUCCION = 20;
   const RPM_MOTOR_MAX = 1000; // rpm del motor, sin reducción
@@ -396,7 +396,7 @@ function ConfigurarPrueba() {
 
     const tramo = 30 / v;
 
-    // Tiempo mínimo de movimiento para no exceder RPM_SALIDA_MAX (si ya hay posiciones)
+    // Tiempo mínimo de movimiento para no exceder RPM_SALIDA_MAX
     let movimientoMin = 0;
     if (positions.start !== null && positions.end !== null) {
       const distancia = Math.abs(positions.end - positions.start);
@@ -420,6 +420,25 @@ function ConfigurarPrueba() {
     inputs.velocidadSalida,
   );
 
+  const errorTiempoMinimo = (tiempo: string) => {
+    if (unidad !== "segundos" || tiempo === "") return "";
+
+    const t = Number(tiempo);
+    if (!Number.isFinite(t) || t <= 0) return "";
+    if (positions.start === null || positions.end === null) return "";
+
+    const distancia = Math.abs(positions.end - positions.start);
+    const minimo = (distancia * 60) / (RPM_SALIDA_MAX * PASOS_POR_REV);
+
+    if (t < minimo) {
+      return `El tiempo mínimo para esta carrera es ${Math.ceil(minimo * 100) / 100} s (límite de velocidad del motor)`;
+    }
+    return "";
+  };
+
+  const errorTiempoEntrada = errorTiempoMinimo(inputs.velocidadEntrada);
+  const errorTiempoSalida = errorTiempoMinimo(inputs.velocidadSalida);
+
   const isReady =
     buttons.guardarPosicionInicial &&
     buttons.guardarPosicionFinal &&
@@ -434,7 +453,9 @@ function ConfigurarPrueba() {
     !inputErrors.esperaEntrada &&
     !inputErrors.esperaSalida &&
     !errorEsperaEntradaCiclos &&
-    !errorEsperaSalidaCiclos;
+    !errorEsperaSalidaCiclos &&
+    !errorTiempoEntrada &&
+    !errorTiempoSalida;
 
   const handleIniciarPrueba = () => {
     if (!isReady) return;
@@ -547,23 +568,31 @@ function ConfigurarPrueba() {
               <div className="flex gap-6">
                 <Input
                   name="velocidadEntrada"
-                  placeholder="Velocidad de entrada"
+                  placeholder={
+                    unidad === "segundos"
+                      ? "Tiempo de entrada"
+                      : "Velocidad de entrada"
+                  }
                   value={inputs.velocidadEntrada}
                   decimals={1}
                   onFocus={() => setActiveInput("velocidadEntrada")}
                   readOnly
-                  error={inputErrors.velocidadEntrada}
+                  error={inputErrors.velocidadEntrada || errorTiempoEntrada}
                   ref={velocidadEntradaRef}
                 />
 
                 <Input
                   name="velocidadSalida"
-                  placeholder="Velocidad de salida"
+                  placeholder={
+                    unidad === "segundos"
+                      ? "Tiempo de salida"
+                      : "Velocidad de salida"
+                  }
                   value={inputs.velocidadSalida}
                   decimals={1}
                   onFocus={() => setActiveInput("velocidadSalida")}
                   readOnly
-                  error={inputErrors.velocidadSalida}
+                  error={inputErrors.velocidadSalida || errorTiempoSalida}
                   ref={velocidadSalidaRef}
                 />
 
@@ -577,6 +606,7 @@ function ConfigurarPrueba() {
                   </option>
                   <option value="mm/s">mm/s</option>
                   <option value="ciclos/min">ciclos/min</option>
+                  <option value="segundos">segundos</option>
                 </select>
               </div>
             </div>
